@@ -1,12 +1,30 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const jwt = require('jsonwebtoken');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
 app.use(cors());
 app.use(express.json());
+
+// Middleware de autenticación para obtener el usuario de la sesión
+app.use(async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.split(' ')[1];
+  
+  if (token) {
+    try {
+      const decoded = jwt.verify(token, process.env.SECRET_KEY);
+      req.user = decoded;
+      console.log('🔐 Usuario autenticado:', req.user?.email);
+    } catch (error) {
+      console.error('Token inválido:', error.message);
+    }
+  }
+  next();
+});
 
 // Importar rutas
 const authRoutes = require('./routes/auth');
