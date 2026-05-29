@@ -1,0 +1,25 @@
+# Dependencias
+node_modules/
+*/node_modules/
+
+# Variables de entorno (contienen contraseñas - NO subir)
+.env
+.env.local
+.env.production
+backend/.env
+
+# Build del frontend
+frontend/dist/
+frontend/build/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/

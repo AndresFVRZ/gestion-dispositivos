@@ -30,6 +30,7 @@ function Equipos() {
 
   const esSuperAdmin = usuario?.rol === 'super_admin';
   const puedeEditar = usuario?.rol === 'super_admin' || usuario?.rol === 'gestion';
+  const puedeEliminar = usuario?.rol === 'super_admin';
 
   const [formData, setFormData] = useState({
     codigo: '', nombre_equipo: '', tipo: 'Desktop', marca: '', modelo: '',
@@ -48,11 +49,8 @@ function Equipos() {
   const cargarDatos = async () => {
     try {
       setCargando(true);
-      if (esSuperAdmin) {
-        const empresasData = await getEmpresas();
-        if (empresasData.success) setEmpresas(empresasData.data);
-      }
-      const equiposData = await getEquipos();
+      const [empresasData, equiposData] = await Promise.all([getEmpresas(), getEquipos()]);
+      if (empresasData.success) setEmpresas(empresasData.data);
       if (equiposData.success) setEquipos(equiposData.data);
     } catch (error) {
       console.error('Error:', error);
@@ -169,49 +167,61 @@ function Equipos() {
       for (let i = 0; i < rows.length; i++) {
         const row = rows[i];
         try {
-          // Usar los nombres exactos de tus columnas
-          const codigo = row['codigo'] || '';
-          const nombreEquipo = row['nombre_equipo'] || '';
-          const tipo = row['tipo'] || 'Desktop';
-          const marca = row['marca'] || '';
-          const modelo = row['modelo'] || '';
-          const serial = row['serial'] || '';
-          let estado = row['estado'] || 'Disponible';
-          const ubicacion = row['ubicación'] || row['ubicacion'] || '';
-          const asignado_a = row['asignado_a'] || '';
-          const procesador = row['procesador'] || '';
-          const ram = row['Ram'] || row['ram'] || '';
-          const disco_duro = row['disco_duro'] || '';
+          const codigo          = row['codigo'] || '';
+          const nombreEquipo    = row['nombre_equipo'] || '';
+          const tipo            = row['tipo'] || 'Desktop';
+          const marca           = row['marca'] || '';
+          const modelo          = row['modelo'] || '';
+          const serial          = row['serial'] || '';
+          let   estado          = row['estado'] || 'Disponible';
+          const ubicacion       = row['ubicación'] || row['ubicacion'] || '';
+          const asignado_a      = row['asignado_a'] || '';
+          const procesador      = row['procesador'] || '';
+          const ram             = row['Ram'] || row['ram'] || row['RAM'] || '';
+          const disco_duro      = row['disco_duro'] || '';
           const sistema_operativo = row['sistema_operativo'] || '';
-          
+          const garantia        = row['garantia'] || row['Garantia'] || row['GARANTIA'] || '';
+          const empresaNombre   = String(row['Empresa'] || row['empresa'] || row['EMPRESA'] || '').trim();
+
           // Normalizar estado
-          estado = estado.toUpperCase();
-          if (estado === 'DISPONIBLE') estado = 'Disponible';
-          if (estado === 'ASIGNADO') estado = 'Asignado';
-          if (estado === 'BAJA') estado = 'Baja';
-          if (estado === 'ACTIVO') estado = 'Activo';
-          
+          const estadoMap = {
+            'DISPONIBLE': 'Disponible', 'ASIGNADO': 'Asignado', 'BAJA': 'Baja',
+            'ACTIVO': 'Activo', 'PRESTAMO': 'Préstamo', 'PRÉSTAMO': 'Préstamo',
+            'MANTENIMIENTO': 'Mantenimiento', 'DAÑADO': 'Dañado',
+          };
+          estado = estadoMap[estado.toUpperCase()] || estado || 'Disponible';
+
           if (!codigo) {
             errores.push(`Fila ${i + 1}: Falta el código`);
             continue;
           }
-          
+
+          // Buscar empresa por nombre (insensible a mayúsculas/minúsculas y espacios)
+          const empresaEncontrada = empresas.find(
+            emp => emp.nombre.trim().toLowerCase() === empresaNombre.toLowerCase()
+          );
+
+          if (!empresaEncontrada) {
+            errores.push(`Fila ${i + 1} (${codigo}): Empresa "${empresaNombre || '(vacía)'}" no encontrada`);
+            continue;
+          }
+
           const nuevoEquipo = {
-            codigo: String(codigo),
-            nombre_equipo: String(nombreEquipo || 'Equipo sin nombre'),
-            tipo: String(tipo),
-            marca: String(marca),
-            modelo: String(modelo),
-            serial: String(serial),
-            estado: String(estado),
-            ubicacion: String(ubicacion),
-            asignado_a: String(asignado_a),
-            procesador: String(procesador),
-            ram: String(ram),
-            disco_duro: String(disco_duro),
+            codigo:           String(codigo),
+            nombre_equipo:    String(nombreEquipo || 'Equipo sin nombre'),
+            tipo:             String(tipo),
+            marca:            String(marca),
+            modelo:           String(modelo),
+            serial:           String(serial),
+            estado:           String(estado),
+            ubicacion:        String(ubicacion),
+            asignado_a:       String(asignado_a),
+            procesador:       String(procesador),
+            ram:              String(ram),
+            disco_duro:       String(disco_duro),
             sistema_operativo: String(sistema_operativo),
-            garantia: '',
-            empresa_id: empresas[0]?.id || 1
+            garantia:         String(garantia),
+            empresa_id:       empresaEncontrada.id,
           };
           
           console.log(`📝 Importando fila ${i + 1}:`, nuevoEquipo.codigo, nuevoEquipo.nombre_equipo);
@@ -228,11 +238,15 @@ function Equipos() {
       }
       
       console.log('📊 Importados:', importados);
-      console.log('📊 Errores:', errores.slice(0, 5));
-      
-      setMensajeImport(`Importación: ${importados} equipos importados, ${errores.length} errores`);
+      console.log('📊 Errores:', errores);
+
+      const resumen = errores.length > 0
+        ? `${importados} equipos importados. ${errores.length} errores: ${errores.slice(0, 3).join(' | ')}${errores.length > 3 ? '...' : ''}`
+        : `${importados} equipos importados correctamente`;
+
+      setMensajeImport(resumen);
       cargarDatos();
-      setTimeout(() => setMensajeImport(''), 5000);
+      setTimeout(() => setMensajeImport(''), 8000);
       
     } catch (error) {
       console.error('Error al leer el archivo:', error);
@@ -314,7 +328,7 @@ function Equipos() {
                 <th>Estado</th>
                 <th>Asignado a</th>
                 <th>Ubicación</th>
-                {puedeEditar && <th>Acciones</th>}
+                <th>Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -340,13 +354,11 @@ function Equipos() {
                       </td>
                       <td>{e.asignado_a || '-'}</td>
                       <td>{e.ubicacion || '-'}</td>
-                      {puedeEditar && (
-                        <td className="acciones-cell">
-                          <button className="btn-view" onClick={() => verDetalleEquipo(e)}>Ver</button>
-                          <button className="btn-edit" onClick={() => abrirModalEditar(e)}>Editar</button>
-                          <button className="btn-delete" onClick={() => handleEliminar(e)}>Eliminar</button>
-                        </td>
-                      )}
+                      <td className="acciones-cell">
+                        <button className="btn-view" onClick={() => verDetalleEquipo(e)}>Ver</button>
+                        {puedeEditar && <button className="btn-edit" onClick={() => abrirModalEditar(e)}>Editar</button>}
+                        {puedeEliminar && <button className="btn-delete" onClick={() => handleEliminar(e)}>Eliminar</button>}
+                      </td>
                     </tr>
                   );
                 })

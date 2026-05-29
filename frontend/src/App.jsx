@@ -74,7 +74,8 @@ function AppContent() {
     return (
       <Layout>
         <Routes>
-          <Route path="/" element={<Navigate to="/equipos" />} />
+          <Route path="/" element={<Navigate to="/dashboard" />} />
+          <Route path="/dashboard" element={<GestionDashboard />} />
           <Route path="/equipos" element={<Equipos />} />
           <Route path="/historial" element={<Historial />} />
         </Routes>
@@ -86,9 +87,9 @@ function AppContent() {
   return (
     <Layout>
       <Routes>
-        <Route path="/" element={<Navigate to="/equipos" />} />
+        <Route path="/" element={<Navigate to="/dashboard" />} />
+        <Route path="/dashboard" element={<VisualizadorDashboard />} />
         <Route path="/equipos" element={<Equipos />} />
-        <Route path="/historial" element={<Historial />} />
       </Routes>
     </Layout>
   );

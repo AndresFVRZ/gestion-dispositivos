@@ -33,14 +33,41 @@ function Usuarios() {
   const cargarDatos = async () => {
     try {
       setCargando(true);
+      console.log('🔄 Cargando usuarios...');
+      
       const [usuariosRes, empresasRes] = await Promise.all([
         getUsuarios(),
         getEmpresas()
       ]);
-      if (usuariosRes.data) setUsuarios(usuariosRes.data);
-      if (empresasRes.data) setEmpresas(empresasRes.data);
+      
+      console.log('📡 Usuarios response:', usuariosRes);
+      console.log('📡 Empresas response:', empresasRes);
+      
+      // Manejar respuesta de usuarios
+      let listaUsuarios = [];
+
+      if (Array.isArray(usuariosRes)) {
+        listaUsuarios = usuariosRes;
+      } else if (Array.isArray(usuariosRes?.data)) {
+        listaUsuarios = usuariosRes.data;
+      }
+
+      console.log('✅ Usuarios cargados:', listaUsuarios.length);
+      setUsuarios(listaUsuarios);
+      
+      // Manejar respuesta de empresas
+      if (empresasRes && empresasRes.data) {
+        if (Array.isArray(empresasRes.data)) {
+          setEmpresas(empresasRes.data);
+        } else if (empresasRes.data.data) {
+          setEmpresas(empresasRes.data.data);
+        } else {
+          setEmpresas([]);
+        }
+      }
+      
     } catch (error) {
-      console.error('Error cargando datos:', error);
+      console.error('❌ Error cargando datos:', error);
     } finally {
       setCargando(false);
     }
@@ -75,8 +102,12 @@ function Usuarios() {
   const handleDelete = async (id) => {
     if (window.confirm('¿Eliminar este usuario?')) {
       try {
-        await eliminarUsuario(id);
-        cargarDatos();
+        const result = await eliminarUsuario(id);
+        if (result && result.success) {
+          cargarDatos();
+        } else {
+          alert(result?.message || 'Error al eliminar usuario');
+        }
       } catch (error) {
         alert('Error al eliminar usuario');
       }
@@ -85,16 +116,60 @@ function Usuarios() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    console.log('📤 Enviando datos:', formData);
+    
+    if (!formData.nombre || !formData.email) {
+      alert('Nombre y email son obligatorios');
+      return;
+    }
+    
+    if (modalMode === 'create' && !formData.password) {
+      alert('La contraseña es obligatoria');
+      return;
+    }
+    
+    if (formData.password && formData.password.length < 6) {
+      alert('La contraseña debe tener al menos 6 caracteres');
+      return;
+    }
+    
+    if (formData.rol !== 'super_admin' && formData.empresas_ids.length === 0) {
+      alert('Debe seleccionar al menos una empresa');
+      return;
+    }
+    
     try {
+      let result;
       if (modalMode === 'create') {
-        await crearUsuario(formData);
+        console.log('🔄 Creando usuario...');
+        result = await crearUsuario(formData);
       } else {
-        await actualizarUsuario(selectedUsuario.id, formData);
+        console.log('🔄 Actualizando usuario...');
+        result = await actualizarUsuario(selectedUsuario.id, formData);
       }
-      setShowModal(false);
-      cargarDatos();
+      
+      console.log('📥 Resultado del servidor:', result);
+      
+      if (result && result.success) {
+        console.log('✅ Usuario guardado exitosamente');
+        setShowModal(false);
+        setFormData({
+          nombre: '',
+          email: '',
+          password: '',
+          rol: 'visualizador',
+          empresas_ids: []
+        });
+        await cargarDatos();
+      } else {
+        const errorMsg = result?.message || 'Error al guardar usuario';
+        console.error('❌ Error:', errorMsg);
+        alert(errorMsg);
+      }
     } catch (error) {
-      alert('Error al guardar usuario');
+      console.error('❌ Error en catch:', error);
+      alert(error.response?.data?.message || error.message || 'Error al guardar usuario');
     }
   };
 
@@ -147,7 +222,7 @@ function Usuarios() {
       <div className="usuarios-header">
         <h1 className="usuarios-title">Usuarios</h1>
         <div className="usuarios-actions">
-          <button className="btn-primary" onClick={handleCreate}>➕ Agregar usuario</button>
+          <button className="btn-primary" onClick={handleCreate}>Agregar usuario</button>
         </div>
       </div>
 
@@ -155,7 +230,7 @@ function Usuarios() {
         <input
           type="text"
           className="filter-input"
-          placeholder="🔍 Buscar por nombre o email..."
+          placeholder="Buscar por nombre o email..."
           value={filtro}
           onChange={(e) => setFiltro(e.target.value)}
         />
@@ -174,7 +249,9 @@ function Usuarios() {
           </thead>
           <tbody>
             {usuariosFiltrados.length === 0 ? (
-              <tr><td colSpan="5" className="usuarios-empty">No hay usuarios registrados</td></tr>
+              <tr>
+                <td colSpan="5" className="usuarios-empty">No hay usuarios registrados</td>
+              </tr>
             ) : (
               usuariosFiltrados.map(usuario => (
                 <tr key={usuario.id}>
@@ -238,17 +315,21 @@ function Usuarios() {
                   <div className="form-group">
                     <label>Empresas Asignadas</label>
                     <div className="empresas-checkbox-group">
-                      {empresas.map(empresa => (
-                        <label key={empresa.id} className="checkbox-label">
-                          <input
-                            type="checkbox"
-                            value={empresa.id}
-                            checked={formData.empresas_ids.includes(empresa.id)}
-                            onChange={handleEmpresaChange}
-                          />
-                          {empresa.nombre}
-                        </label>
-                      ))}
+                      {empresas.length === 0 ? (
+                        <p className="no-empresas">No hay empresas disponibles</p>
+                      ) : (
+                        empresas.map(empresa => (
+                          <label key={empresa.id} className="checkbox-label">
+                            <input
+                              type="checkbox"
+                              value={empresa.id}
+                              checked={formData.empresas_ids.includes(empresa.id)}
+                              onChange={handleEmpresaChange}
+                            />
+                            <span className="checkbox-text">{empresa.nombre}</span>
+                          </label>
+                        ))
+                      )}
                     </div>
                     {formData.rol === 'gestion' && formData.empresas_ids.length === 0 && (
                       <small className="warning-text">Los usuarios con rol Gestión deben tener al menos una empresa asignada</small>
@@ -569,44 +650,71 @@ usuariosStyles.textContent = `
 
   .empresas-checkbox-group {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
     gap: 10px;
     max-height: 200px;
     overflow-y: auto;
-    padding: 10px;
+    padding: 12px;
     border: 1px solid #e2e8f0;
     border-radius: 8px;
     background: #f8fafc;
+    margin-top: 4px;
   }
 
   .checkbox-label {
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 14px;
-    color: #334155;
+    padding: 6px 8px;
+    background: white;
+    border-radius: 6px;
     cursor: pointer;
+    transition: all 0.2s;
+    border: 1px solid #e2e8f0;
+  }
+
+  .checkbox-label:hover {
+    background: #eff6ff;
+    border-color: #2563eb;
   }
 
   .checkbox-label input {
     width: 16px;
     height: 16px;
     cursor: pointer;
+    accent-color: #2563eb;
+    margin: 0;
+  }
+
+  .checkbox-text {
+    font-size: 13px;
+    font-weight: 500;
+    color: #334155;
+  }
+
+  .no-empresas {
+    text-align: center;
+    padding: 20px;
+    color: #94a3b8;
+    font-size: 13px;
   }
 
   .warning-text {
     display: block;
     margin-top: 8px;
-    font-size: 12px;
+    font-size: 11px;
     color: #dc2626;
+    background: #fef2f2;
+    padding: 6px 10px;
+    border-radius: 6px;
   }
 
   .info-message {
     background: #e0e7ff;
     color: #4338ca;
-    padding: 10px;
+    padding: 10px 12px;
     border-radius: 8px;
-    font-size: 13px;
+    font-size: 12px;
     text-align: center;
     margin-top: 16px;
   }

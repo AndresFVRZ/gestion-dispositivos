@@ -11,13 +11,17 @@ const Sidebar = () => {
 
   const menuItems = usuario?.rol === 'super_admin' ? [
     { path: '/super-admin', nombre: 'Dashboard' },
-    { path: '/equipos', nombre: 'Equipos' },
-    { path: '/usuarios', nombre: 'Usuarios' },
-    { path: '/papelera', nombre: 'Papelera' },
-    { path: '/historial', nombre: 'Historial' },
+    { path: '/equipos',     nombre: 'Equipos' },
+    { path: '/usuarios',    nombre: 'Usuarios' },
+    { path: '/papelera',    nombre: 'Papelera' },
+    { path: '/historial',   nombre: 'Historial' },
+  ] : usuario?.rol === 'gestion' ? [
+    { path: '/dashboard',  nombre: 'Dashboard' },
+    { path: '/equipos',    nombre: 'Equipos' },
+    { path: '/historial',  nombre: 'Historial' },
   ] : [
-    { path: '/equipos', nombre: 'Equipos' },
-    { path: '/historial', nombre: 'Historial' },
+    { path: '/dashboard', nombre: 'Dashboard' },
+    { path: '/equipos',   nombre: 'Equipos' },
   ];
 
   if (!usuario) return null;

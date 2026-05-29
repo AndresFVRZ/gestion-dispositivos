@@ -14,66 +14,103 @@ function Login() {
     e.preventDefault();
     setError('');
     setLoading(true);
-    
+
     try {
-      await login(email, password);
-      navigate('/equipos');
+      const result = await login(email, password);
+      if (result.success) {
+        navigate('/');
+      } else {
+        setError(result.message || 'Credenciales incorrectas');
+      }
     } catch (err) {
-      setError(err.response?.data?.message || 'Error al iniciar sesión');
+      setError('Error de conexión con el servidor');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="login-container">
-      <div className="login-card">
-        <div className="login-header">
-          <div className="login-logo">GE</div>
-          <h1 className="login-title">Gestión de Equipos</h1>
-          <p className="login-subtitle">Acceso unificado para todas las empresas</p>
+    <div className="login-page">
+      {/* Panel izquierdo - Branding */}
+      <div className="login-brand">
+        <div className="login-brand-inner">
+          <div className="login-brand-logo">GE</div>
+          <h1 className="login-brand-title">Gestión de Equipos</h1>
+          <p className="login-brand-sub">Sistema corporativo de inventario tecnológico</p>
+          <div className="login-brand-features">
+            <div className="login-feature">
+              <span className="login-feature-dot" />
+              Control total de dispositivos
+            </div>
+            <div className="login-feature">
+              <span className="login-feature-dot" />
+              Gestión multiempresa
+            </div>
+            <div className="login-feature">
+              <span className="login-feature-dot" />
+              Historial de cambios en tiempo real
+            </div>
+          </div>
         </div>
-        
-        {error && <div className="login-error">{error}</div>}
-        
-        <form onSubmit={handleSubmit} className="login-form">
-          <div className="input-group">
-            <label className="input-label">Correo electrónico</label>
-            <div className="input-wrapper">
-              <span className="input-icon"></span>
+      </div>
+
+      {/* Panel derecho - Formulario */}
+      <div className="login-form-panel">
+        <div className="login-card">
+          <div className="login-card-header">
+            <h2 className="login-card-title">Iniciar sesión</h2>
+            <p className="login-card-sub">Ingresa tus credenciales para continuar</p>
+          </div>
+
+          {error && (
+            <div className="login-error">
+              <span className="login-error-icon">!</span>
+              {error}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="login-form">
+            <div className="login-field">
+              <label className="login-label">Correo electrónico</label>
               <input
                 type="email"
-                className="input-field"
+                className="login-input"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 placeholder="usuario@empresa.com"
+                autoComplete="email"
               />
             </div>
-          </div>
-          
-          <div className="input-group">
-            <label className="input-label">Contraseña</label>
-            <div className="input-wrapper">
-              <span className="input-icon"></span>
+
+            <div className="login-field">
+              <label className="login-label">Contraseña</label>
               <input
                 type="password"
-                className="input-field"
+                className="login-input"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                placeholder="**********"
+                placeholder="••••••••"
+                autoComplete="current-password"
               />
             </div>
+
+            <button type="submit" className="login-btn" disabled={loading}>
+              {loading ? (
+                <span className="login-btn-loading">
+                  <span className="login-spinner" />
+                  Verificando...
+                </span>
+              ) : 'Ingresar al sistema'}
+            </button>
+          </form>
+
+          <div className="login-footer">
+            <Link to="/forgot-password" className="login-link">
+              ¿Olvidaste tu contraseña?
+            </Link>
           </div>
-          
-          <button type="submit" className="login-btn" disabled={loading}>
-            {loading ? 'Ingresando...' : 'Ingresar'}
-          </button>
-        </form>
-        
-        <div className="login-footer">
-          <Link to="/forgot-password">¿Olvidaste tu contraseña?</Link>
         </div>
       </div>
     </div>
@@ -82,168 +119,160 @@ function Login() {
 
 export default Login;
 
-// ============================================
-// ESTILOS PROFESIONALES DEL COMPONENTE
-// ============================================
 const loginStyles = document.createElement('style');
 loginStyles.textContent = `
-  .login-container {
+  * { box-sizing: border-box; }
+
+  .login-page {
     min-height: 100vh;
     display: flex;
-    align-items: center;
-    justify-content: center;
-    background: linear-gradient(135deg, #0f2b5c 0%, #1a3d7c 50%, #2c5aa6 100%);
-    padding: 20px;
   }
 
+  /* ── Panel izquierdo ── */
+  .login-brand {
+    width: 45%;
+    background: linear-gradient(160deg, #0a1f44 0%, #0f2b5c 40%, #1a3d7c 80%, #1e4d99 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 48px;
+    position: relative;
+    overflow: hidden;
+  }
+  .login-brand::before {
+    content: '';
+    position: absolute;
+    width: 400px; height: 400px;
+    background: rgba(255,255,255,0.03);
+    border-radius: 50%;
+    top: -100px; right: -100px;
+  }
+  .login-brand::after {
+    content: '';
+    position: absolute;
+    width: 300px; height: 300px;
+    background: rgba(255,255,255,0.03);
+    border-radius: 50%;
+    bottom: -80px; left: -80px;
+  }
+  .login-brand-inner { position: relative; z-index: 1; max-width: 340px; }
+  .login-brand-logo {
+    width: 72px; height: 72px;
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    border-radius: 20px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 30px; font-weight: 800; color: white;
+    margin-bottom: 28px;
+    box-shadow: 0 12px 32px rgba(37,99,235,0.4);
+  }
+  .login-brand-title {
+    font-size: 30px; font-weight: 700; color: white;
+    margin: 0 0 12px 0; line-height: 1.2;
+  }
+  .login-brand-sub {
+    font-size: 15px; color: rgba(255,255,255,0.6);
+    margin: 0 0 40px 0; line-height: 1.6;
+  }
+  .login-brand-features { display: flex; flex-direction: column; gap: 14px; }
+  .login-feature {
+    display: flex; align-items: center; gap: 12px;
+    font-size: 14px; color: rgba(255,255,255,0.75);
+  }
+  .login-feature-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #3b82f6; flex-shrink: 0;
+    box-shadow: 0 0 8px rgba(59,130,246,0.6);
+  }
+
+  /* ── Panel derecho ── */
+  .login-form-panel {
+    flex: 1;
+    display: flex; align-items: center; justify-content: center;
+    padding: 48px 32px;
+    background: #f8fafc;
+  }
   .login-card {
     background: white;
-    border-radius: 24px;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-    width: 100%;
-    max-width: 440px;
-    padding: 40px;
-    animation: fadeIn 0.5s ease;
+    border-radius: 20px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+    width: 100%; max-width: 420px;
+    padding: 44px 40px;
+    animation: loginSlide 0.4s ease;
+  }
+  @keyframes loginSlide {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .login-card-title {
+    font-size: 26px; font-weight: 700; color: #0f172a;
+    margin: 0 0 6px 0;
+  }
+  .login-card-sub {
+    font-size: 14px; color: #64748b; margin: 0 0 32px 0;
   }
 
-  .login-header {
-    text-align: center;
-    margin-bottom: 32px;
-  }
-
-  .login-logo {
-    width: 64px;
-    height: 64px;
-    background: linear-gradient(135deg, #0f2b5c, #1a3d7c);
-    border-radius: 16px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 0 auto 20px auto;
-    font-size: 28px;
-    font-weight: 700;
-    color: white;
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
-  }
-
-  .login-title {
-    font-size: 24px;
-    font-weight: 700;
-    color: #1a2c3e;
-    margin-bottom: 8px;
-  }
-
-  .login-subtitle {
-    color: #718096;
-    font-size: 14px;
-  }
-
+  /* Error */
   .login-error {
-    background: #fed7d7;
-    color: #742a2a;
-    padding: 12px 16px;
-    border-radius: 12px;
-    margin-bottom: 20px;
-    border-left: 4px solid #dc2626;
-    font-size: 14px;
+    display: flex; align-items: center; gap: 10px;
+    background: #fef2f2; color: #dc2626;
+    border: 1px solid #fecaca; border-radius: 10px;
+    padding: 12px 16px; margin-bottom: 24px; font-size: 14px;
+  }
+  .login-error-icon {
+    width: 20px; height: 20px; border-radius: 50%;
+    background: #dc2626; color: white; font-weight: 700;
+    font-size: 12px; display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
   }
 
-  .login-form {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
+  /* Form */
+  .login-form { display: flex; flex-direction: column; gap: 20px; }
+  .login-field { display: flex; flex-direction: column; gap: 6px; }
+  .login-label { font-size: 13px; font-weight: 600; color: #374151; }
+  .login-input {
+    width: 100%; padding: 12px 14px;
+    border: 1.5px solid #e2e8f0; border-radius: 10px;
+    font-size: 14px; color: #0f172a; outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    background: #fafafa;
   }
-
-  .input-group {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+  .login-input:focus {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
+    background: white;
   }
+  .login-input::placeholder { color: #94a3b8; }
 
-  .input-label {
-    font-size: 14px;
-    font-weight: 600;
-    color: #2d3748;
-  }
-
-  .input-wrapper {
-    position: relative;
-  }
-
-  .input-icon {
-    position: absolute;
-    left: 14px;
-    top: 50%;
-    transform: translateY(-50%);
-    font-size: 16px;
-    opacity: 0.6;
-  }
-
-  .input-field {
-    width: 100%;
-    padding: 12px 16px 12px 42px;
-    border: 1.5px solid #e2e8f0;
-    border-radius: 12px;
-    font-size: 14px;
-    transition: all 0.2s;
-    outline: none;
-  }
-
-  .input-field:focus {
-    border-color: #1a3d7c;
-    box-shadow: 0 0 0 3px rgba(26, 61, 124, 0.1);
-  }
-
+  /* Botón */
   .login-btn {
-    background: #1a3d7c;
-    color: white;
-    padding: 12px 20px;
-    border-radius: 12px;
-    border: none;
-    cursor: pointer;
-    font-weight: 600;
-    font-size: 15px;
-    transition: all 0.2s;
-    margin-top: 8px;
+    width: 100%; padding: 13px;
+    background: linear-gradient(135deg, #1a3d7c, #2563eb);
+    color: white; border: none; border-radius: 10px;
+    font-size: 15px; font-weight: 600; cursor: pointer;
+    transition: opacity 0.2s, transform 0.15s;
+    margin-top: 4px;
   }
-
-  .login-btn:hover {
-    background: #0f2b5c;
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  .login-btn:hover:not(:disabled) { opacity: 0.92; transform: translateY(-1px); }
+  .login-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+  .login-btn-loading { display: flex; align-items: center; justify-content: center; gap: 10px; }
+  .login-spinner {
+    width: 16px; height: 16px;
+    border: 2px solid rgba(255,255,255,0.4);
+    border-top-color: white; border-radius: 50%;
+    animation: spin 0.7s linear infinite;
   }
+  @keyframes spin { to { transform: rotate(360deg); } }
 
-  .login-btn:disabled {
-    opacity: 0.7;
-    cursor: not-allowed;
-    transform: none;
-  }
+  /* Footer */
+  .login-footer { text-align: center; margin-top: 24px; }
+  .login-link { color: #2563eb; font-size: 14px; font-weight: 500; text-decoration: none; }
+  .login-link:hover { text-decoration: underline; }
 
-  .login-footer {
-    text-align: center;
-    margin-top: 24px;
-  }
-
-  .login-footer a {
-    color: #1a3d7c;
-    font-size: 14px;
-    text-decoration: none;
-    font-weight: 500;
-  }
-
-  .login-footer a:hover {
-    text-decoration: underline;
-  }
-
-  @keyframes fadeIn {
-    from {
-      opacity: 0;
-      transform: translateY(-20px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
+  /* Responsive */
+  @media (max-width: 768px) {
+    .login-brand { display: none; }
+    .login-form-panel { padding: 32px 20px; background: linear-gradient(160deg,#0f2b5c,#1a3d7c); }
+    .login-card { padding: 32px 24px; }
   }
 `;
 document.head.appendChild(loginStyles);

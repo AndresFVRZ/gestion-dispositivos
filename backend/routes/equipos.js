@@ -52,19 +52,22 @@ router.post('/', async (req, res) => {
     asignado_a, procesador, ram, disco_duro, sistema_operativo,
     fecha_asignacion, garantia, empresa_id
   } = req.body;
-  
+
   const usuarioId = req.user?.id || 1;
-  
+  const fechaVal  = fecha_asignacion && String(fecha_asignacion).trim() !== '' ? fecha_asignacion : null;
+  const garantiaVal = garantia && String(garantia).trim() !== '' ? garantia : null;
+  const empresaVal  = empresa_id && String(empresa_id).trim() !== '' ? empresa_id : null;
+
   try {
     const result = await db.query(
-      `INSERT INTO equipos (codigo, nombre_equipo, tipo, marca, modelo, serial, estado, 
-        ubicacion, asignado_a, procesador, ram, disco_duro, sistema_operativo, 
+      `INSERT INTO equipos (codigo, nombre_equipo, tipo, marca, modelo, serial, estado,
+        ubicacion, asignado_a, procesador, ram, disco_duro, sistema_operativo,
         fecha_asignacion, garantia, empresa_id, eliminado)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, false)
        RETURNING id`,
-      [codigo, nombre_equipo, tipo, marca, modelo, serial, estado || 'disponible',
+      [codigo, nombre_equipo, tipo, marca, modelo, serial, estado || 'Disponible',
        ubicacion, asignado_a, procesador, ram, disco_duro, sistema_operativo,
-       fecha_asignacion, garantia, empresa_id]
+       fechaVal, garantiaVal, empresaVal]
     );
     
     const equipoId = result.rows[0].id;
@@ -86,18 +89,21 @@ router.put('/:id', async (req, res) => {
     asignado_a, procesador, ram, disco_duro, sistema_operativo,
     fecha_asignacion, garantia, empresa_id
   } = req.body;
-  
+
   const usuarioId = req.user?.id || 1;
-  
+  const fechaVal   = fecha_asignacion && String(fecha_asignacion).trim() !== '' ? fecha_asignacion : null;
+  const garantiaVal = garantia && String(garantia).trim() !== '' ? garantia : null;
+  const empresaVal  = empresa_id && String(empresa_id).trim() !== '' ? empresa_id : null;
+
   try {
     await db.query(
-      `UPDATE equipos SET codigo=$1, nombre_equipo=$2, tipo=$3, marca=$4, modelo=$5, 
-        serial=$6, estado=$7, ubicacion=$8, asignado_a=$9, procesador=$10, 
-        ram=$11, disco_duro=$12, sistema_operativo=$13, fecha_asignacion=$14, 
+      `UPDATE equipos SET codigo=$1, nombre_equipo=$2, tipo=$3, marca=$4, modelo=$5,
+        serial=$6, estado=$7, ubicacion=$8, asignado_a=$9, procesador=$10,
+        ram=$11, disco_duro=$12, sistema_operativo=$13, fecha_asignacion=$14,
         garantia=$15, empresa_id=$16 WHERE id=$17`,
       [codigo, nombre_equipo, tipo, marca, modelo, serial, estado, ubicacion,
        asignado_a, procesador, ram, disco_duro, sistema_operativo,
-       fecha_asignacion, garantia, empresa_id, id]
+       fechaVal, garantiaVal, empresaVal, id]
     );
     
     await registrarHistorial(id, usuarioId, 'edicion', `Equipo actualizado: ${codigo} - ${nombre_equipo}`);
