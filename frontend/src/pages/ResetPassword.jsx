@@ -1,8 +1,13 @@
-// src/pages/ResetPassword.jsx
+// ==========================================
+// 1. IMPORTACIONES
+// ==========================================
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { resetPassword } from '../services/authService';
 
+// ==========================================
+// 2. LÓGICA DEL COMPONENTE
+// ==========================================
 function ResetPassword() {
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token');
@@ -53,11 +58,11 @@ function ResetPassword() {
 
   if (!token) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100">
-        <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-8 text-center">
-          <h1 className="text-2xl font-bold mb-4">Enlace inválido</h1>
-          <p className="text-gray-500 mb-4">{error}</p>
-          <a href="/forgot-password" className="text-primary-500 hover:underline">
+      <div style={styles.container}>
+        <div style={styles.card}>
+          <h1 style={styles.title}>Enlace inválido</h1>
+          <p style={styles.errorText}>{error}</p>
+          <a href="/forgot-password" style={styles.link}>
             Solicitar nuevo enlace
           </a>
         </div>
@@ -66,21 +71,13 @@ function ResetPassword() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-8">
-        <h1 className="text-2xl font-bold text-center mb-2">Restablecer contraseña</h1>
-        <p className="text-gray-500 text-center mb-6">Ingresa tu nueva contraseña</p>
+    <div style={styles.container}>
+      <div style={styles.card}>
+        <h1 style={styles.title}>Restablecer contraseña</h1>
+        <p style={styles.subtitle}>Ingresa tu nueva contraseña</p>
 
-        {mensaje && (
-          <div className="bg-green-100 text-green-700 p-3 rounded mb-4 text-sm">
-            {mensaje}
-          </div>
-        )}
-        {error && (
-          <div className="bg-red-100 text-red-700 p-3 rounded mb-4 text-sm">
-            {error}
-          </div>
-        )}
+        {mensaje && <div style={styles.mensajeExito}>{mensaje}</div>}
+        {error && <div style={styles.mensajeError}>{error}</div>}
 
         <form onSubmit={handleSubmit}>
           <input
@@ -88,7 +85,7 @@ function ResetPassword() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Nueva contraseña"
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 mb-4"
+            style={styles.input}
             required
           />
           <input
@@ -96,24 +93,120 @@ function ResetPassword() {
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
             placeholder="Confirmar contraseña"
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 mb-4"
+            style={styles.input}
             required
           />
           <button
             type="submit"
             disabled={cargando}
-            className="w-full bg-primary-500 text-white py-2 rounded-lg hover:bg-primary-600 disabled:opacity-50"
+            style={cargando ? { ...styles.button, ...styles.buttonDisabled } : styles.button}
           >
             {cargando ? 'Restableciendo...' : 'Restablecer contraseña'}
           </button>
         </form>
 
-        <div className="text-center mt-4">
-          <a href="/" className="text-primary-500 hover:underline">Volver al inicio</a>
+        <div style={styles.linkContainer}>
+          <a href="/" style={styles.link}>
+            Volver al inicio
+          </a>
         </div>
       </div>
     </div>
   );
 }
 
+// ==========================================
+// 3. ESTILOS
+// ==========================================
+const styles = {
+  container: {
+    minHeight: '100vh',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f3f4f6',
+  },
+  card: {
+    backgroundColor: 'white',
+    borderRadius: '12px',
+    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
+    width: '100%',
+    maxWidth: '400px',
+    padding: '32px',
+  },
+  title: {
+    fontSize: '24px',
+    fontWeight: 'bold',
+    textAlign: 'center',
+    color: '#1f2937',
+    marginBottom: '8px',
+  },
+  subtitle: {
+    textAlign: 'center',
+    color: '#6b7280',
+    marginBottom: '24px',
+    fontSize: '14px',
+  },
+  mensajeExito: {
+    backgroundColor: '#d1fae5',
+    color: '#065f46',
+    padding: '10px 16px',
+    borderRadius: '8px',
+    marginBottom: '16px',
+    fontSize: '14px',
+  },
+  mensajeError: {
+    backgroundColor: '#fee2e2',
+    color: '#dc2626',
+    padding: '10px 16px',
+    borderRadius: '8px',
+    marginBottom: '16px',
+    fontSize: '14px',
+  },
+  errorText: {
+    textAlign: 'center',
+    color: '#6b7280',
+    marginBottom: '20px',
+    fontSize: '14px',
+  },
+  input: {
+    width: '100%',
+    padding: '10px 12px',
+    border: '1px solid #d1d5db',
+    borderRadius: '8px',
+    fontSize: '14px',
+    marginBottom: '16px',
+    outline: 'none',
+    boxSizing: 'border-box',
+  },
+  button: {
+    width: '100%',
+    backgroundColor: '#1e40af',
+    color: 'white',
+    fontWeight: '500',
+    padding: '10px 16px',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    border: 'none',
+    fontSize: '14px',
+    transition: 'background-color 0.2s',
+  },
+  buttonDisabled: {
+    opacity: 0.5,
+    cursor: 'not-allowed',
+  },
+  linkContainer: {
+    textAlign: 'center',
+    marginTop: '20px',
+  },
+  link: {
+    color: '#1e40af',
+    textDecoration: 'none',
+    fontSize: '14px',
+  },
+};
+
+// ==========================================
+// 4. EXPORTACIÓN
+// ==========================================
 export default ResetPassword;

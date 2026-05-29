@@ -1,7 +1,13 @@
+// ==========================================
+// 1. IMPORTACIONES
+// ==========================================
 import React, { useState, useEffect } from 'react';
 import { getHistorial } from '../services/historialService';
 import { useAuth } from '../context/AuthContext';
 
+// ==========================================
+// 2. LÓGICA DEL COMPONENTE
+// ==========================================
 function Historial() {
   const [historial, setHistorial] = useState([]);
   const [cargando, setCargando] = useState(true);
@@ -34,47 +40,47 @@ function Historial() {
   };
 
   const getColorAccion = (accion) => {
-    switch (accion) {
-      case 'CREAR': return 'bg-green-100 text-green-700';
-      case 'EDITAR': return 'bg-blue-100 text-blue-700';
-      case 'ELIMINAR': return 'bg-yellow-100 text-yellow-700';
-      case 'RESTAURAR': return 'bg-purple-100 text-purple-700';
-      case 'ELIMINAR_PERMANENTE': return 'bg-red-100 text-red-700';
-      default: return 'bg-gray-100 text-gray-700';
-    }
+    const map = {
+      'CREAR': 'badge-success',
+      'EDITAR': 'badge-info',
+      'ELIMINAR': 'badge-warning',
+      'RESTAURAR': 'badge-info',
+      'ELIMINAR_PERMANENTE': 'badge-danger'
+    };
+    return map[accion] || 'badge-neutral';
   };
 
   const getNombreAccion = (accion) => {
-    switch (accion) {
-      case 'CREAR': return 'Creación';
-      case 'EDITAR': return 'Edición';
-      case 'ELIMINAR': return 'Papelera';
-      case 'RESTAURAR': return 'Restauración';
-      case 'ELIMINAR_PERMANENTE': return 'Eliminación permanente';
-      default: return accion;
-    }
+    const map = {
+      'CREAR': 'Creación',
+      'EDITAR': 'Edición',
+      'ELIMINAR': 'Papelera',
+      'RESTAURAR': 'Restauración',
+      'ELIMINAR_PERMANENTE': 'Eliminación permanente'
+    };
+    return map[accion] || accion;
   };
 
   if (cargando) {
-    return <div className="flex justify-center items-center h-64">Cargando historial...</div>;
+    return <div style={styles.cargando}>Cargando historial...</div>;
   }
 
   return (
-    <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">Historial de Acciones</h1>
-        <p className="text-gray-500">Registro de todas las acciones del sistema</p>
+    <div style={styles.container}>
+      <div style={styles.header}>
+        <h1 style={styles.title}>Historial de Acciones</h1>
+        <p style={styles.subtitle}>Registro de todas las acciones del sistema</p>
       </div>
 
       {/* Filtros */}
-      <div className="bg-white rounded-lg shadow p-4 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div style={styles.filtersContainer}>
+        <div style={styles.filtersGrid}>
           <div>
-            <label className="label">Acción</label>
+            <label style={styles.label}>Acción</label>
             <select
               value={filtroAccion}
               onChange={(e) => setFiltroAccion(e.target.value)}
-              className="input"
+              style={styles.select}
             >
               <option value="todos">Todas</option>
               <option value="CREAR">Creación</option>
@@ -85,28 +91,25 @@ function Historial() {
             </select>
           </div>
           <div>
-            <label className="label">Desde</label>
+            <label style={styles.label}>Desde</label>
             <input
               type="date"
               value={fechaDesde}
               onChange={(e) => setFechaDesde(e.target.value)}
-              className="input"
+              style={styles.input}
             />
           </div>
           <div>
-            <label className="label">Hasta</label>
+            <label style={styles.label}>Hasta</label>
             <input
               type="date"
               value={fechaHasta}
               onChange={(e) => setFechaHasta(e.target.value)}
-              className="input"
+              style={styles.input}
             />
           </div>
-          <div className="flex items-end">
-            <button
-              onClick={cargarHistorial}
-              className="bg-primary-500 text-white px-4 py-2 rounded-lg hover:bg-primary-600"
-            >
+          <div style={styles.filterButtonContainer}>
+            <button onClick={cargarHistorial} style={styles.filterButton}>
               Filtrar
             </button>
           </div>
@@ -114,47 +117,180 @@ function Historial() {
       </div>
 
       {/* Tabla de historial */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50">
+      <div style={styles.tableContainer}>
+        <div style={styles.tableWrapper}>
+          <table style={styles.table}>
+            <thead style={styles.thead}>
               <tr>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Fecha</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Usuario</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Rol</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Acción</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Equipo</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Código</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Detalles</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">IP</th>
+                <th style={styles.th}>Fecha</th>
+                <th style={styles.th}>Usuario</th>
+                <th style={styles.th}>Rol</th>
+                <th style={styles.th}>Acción</th>
+                <th style={styles.th}>Equipo</th>
+                <th style={styles.th}>Código</th>
+                <th style={styles.th}>Detalles</th>
+                <th style={styles.th}>IP</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
-              {historial.map((item) => (
-                <tr key={item.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 text-sm">{new Date(item.fecha).toLocaleString()}</td>
-                  <td className="px-4 py-3 text-sm font-medium">{item.usuario_nombre || '-'}</td>
-                  <td className="px-4 py-3 text-sm">{item.usuario_rol || '-'}</td>
-                  <td className="px-4 py-3">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getColorAccion(item.accion)}`}>
-                      {getNombreAccion(item.accion)}
-                    </span>
+            <tbody>
+              {historial.length === 0 ? (
+                <tr>
+                  <td colSpan="8" style={styles.emptyCell}>
+                    No hay registros en el historial
                   </td>
-                  <td className="px-4 py-3 text-sm">{item.equipo_nombre || '-'}</td>
-                  <td className="px-4 py-3 text-sm font-mono">{item.equipo_codigo || '-'}</td>
-                  <td className="px-4 py-3 text-sm">{item.detalles || '-'}</td>
-                  <td className="px-4 py-3 text-sm text-gray-500">{item.ip_address || '-'}</td>
                 </tr>
-              ))}
+              ) : (
+                historial.map((item) => (
+                  <tr key={item.id} style={styles.tr}>
+                    <td style={styles.td}>{new Date(item.fecha).toLocaleString()}</td>
+                    <td style={{ ...styles.td, fontWeight: '500' }}>{item.usuario_nombre || '-'}</td>
+                    <td style={styles.td}>{item.usuario_rol || '-'}</td>
+                    <td style={styles.td}>
+                      <span className={getColorAccion(item.accion)} style={styles.badge}>
+                        {getNombreAccion(item.accion)}
+                      </span>
+                    </td>
+                    <td style={styles.td}>{item.equipo_nombre || '-'}</td>
+                    <td style={styles.td}>{item.equipo_codigo || '-'}</td>
+                    <td style={styles.td}>{item.detalles || '-'}</td>
+                    <td style={styles.td}>{item.ip_address || '-'}</td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
-          {historial.length === 0 && (
-            <div className="text-center py-8 text-gray-500">No hay registros en el historial</div>
-          )}
         </div>
       </div>
     </div>
   );
 }
 
+// ==========================================
+// 3. ESTILOS
+// ==========================================
+const styles = {
+  container: {
+    padding: '24px',
+  },
+  header: {
+    marginBottom: '24px',
+  },
+  title: {
+    fontSize: '24px',
+    fontWeight: 'bold',
+    color: '#1f2937',
+    margin: '0 0 4px 0',
+  },
+  subtitle: {
+    color: '#6b7280',
+    fontSize: '14px',
+    margin: 0,
+  },
+  filtersContainer: {
+    backgroundColor: 'white',
+    borderRadius: '12px',
+    padding: '20px',
+    marginBottom: '24px',
+    boxShadow: '0 1px 2px 0 rgba(0,0,0,0.05)',
+  },
+  filtersGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+    gap: '16px',
+    alignItems: 'end',
+  },
+  label: {
+    display: 'block',
+    fontSize: '14px',
+    fontWeight: '500',
+    color: '#374151',
+    marginBottom: '6px',
+  },
+  select: {
+    width: '100%',
+    padding: '8px 12px',
+    border: '1px solid #d1d5db',
+    borderRadius: '8px',
+    fontSize: '14px',
+    backgroundColor: 'white',
+  },
+  input: {
+    width: '100%',
+    padding: '8px 12px',
+    border: '1px solid #d1d5db',
+    borderRadius: '8px',
+    fontSize: '14px',
+  },
+  filterButtonContainer: {
+    display: 'flex',
+    alignItems: 'flex-end',
+  },
+  filterButton: {
+    backgroundColor: '#1e40af',
+    color: 'white',
+    fontWeight: '500',
+    padding: '8px 20px',
+    borderRadius: '8px',
+    border: 'none',
+    cursor: 'pointer',
+    fontSize: '14px',
+    width: '100%',
+  },
+  tableContainer: {
+    backgroundColor: 'white',
+    borderRadius: '12px',
+    overflow: 'hidden',
+    boxShadow: '0 1px 2px 0 rgba(0,0,0,0.05)',
+  },
+  tableWrapper: {
+    overflowX: 'auto',
+  },
+  table: {
+    width: '100%',
+    borderCollapse: 'collapse',
+  },
+  thead: {
+    backgroundColor: '#f9fafb',
+  },
+  th: {
+    textAlign: 'left',
+    padding: '12px 16px',
+    fontSize: '12px',
+    fontWeight: '600',
+    color: '#6b7280',
+    borderBottom: '1px solid #e5e7eb',
+  },
+  td: {
+    padding: '12px 16px',
+    fontSize: '14px',
+    color: '#374151',
+    borderBottom: '1px solid #e5e7eb',
+  },
+  tr: {
+    transition: 'background-color 0.2s',
+  },
+  emptyCell: {
+    textAlign: 'center',
+    padding: '60px',
+    color: '#9ca3af',
+  },
+  badge: {
+    display: 'inline-block',
+    padding: '4px 10px',
+    borderRadius: '9999px',
+    fontSize: '12px',
+    fontWeight: '500',
+  },
+  cargando: {
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    height: '256px',
+    color: '#6b7280',
+  },
+};
+
+// ==========================================
+// 4. EXPORTACIÓN
+// ==========================================
 export default Historial;

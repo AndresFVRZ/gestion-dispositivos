@@ -1,11 +1,16 @@
+// ==========================================
+// 1. IMPORTACIONES
+// ==========================================
 import React, { useState, useEffect } from 'react';
 import { getPapelera, restaurarEquipo, eliminarPermanente } from '../services/equiposService';
 import { getEmpresas } from '../services/empresasService';
 import { useAuth } from '../context/AuthContext';
-import Boton from '../components/Common/Boton';
 
+// ==========================================
+// 2. LÓGICA DEL COMPONENTE
+// ==========================================
 function Papelera() {
-  const { token, usuario } = useAuth();
+  const { usuario } = useAuth();
   const [equipos, setEquipos] = useState([]);
   const [empresas, setEmpresas] = useState([]);
   const [cargando, setCargando] = useState(true);
@@ -76,92 +81,207 @@ function Papelera() {
   });
 
   if (cargando) {
-    return <div className="flex justify-center items-center h-64">Cargando papelera...</div>;
+    return <div style={styles.cargando}>Cargando papelera...</div>;
   }
 
   return (
-    <div>
-      <div className="flex justify-between items-center mb-6">
+    <div style={styles.container}>
+      <div style={styles.header}>
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">Papelera</h1>
-          <p className="text-gray-500">Equipos eliminados (soft delete)</p>
+          <h1 style={styles.title}>Papelera</h1>
+          <p style={styles.subtitle}>Equipos eliminados</p>
         </div>
       </div>
 
-      {mensaje && (
-        <div className="bg-green-100 text-green-700 p-3 rounded-lg mb-4">
-          {mensaje}
-        </div>
-      )}
+      {mensaje && <div style={styles.mensajeExito}>{mensaje}</div>}
 
       {/* Buscador */}
-      <div className="bg-white rounded-lg shadow p-4 mb-6">
-        <div className="max-w-md">
+      <div style={styles.searchContainer}>
+        <div style={styles.searchWrapper}>
           <input
             type="text"
             value={filtroBusqueda}
             onChange={(e) => setFiltroBusqueda(e.target.value)}
             placeholder="Buscar por nombre o código..."
-            className="input"
+            style={styles.input}
           />
         </div>
       </div>
 
       {/* Tabla de equipos en papelera */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50">
+      <div style={styles.tableContainer}>
+        <div style={styles.tableWrapper}>
+          <table style={styles.table}>
+            <thead style={styles.thead}>
               <tr>
-                {esSuperAdmin && <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Empresa</th>}
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Código</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Equipo</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Tipo</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Estado original</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Eliminado el</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Eliminado por</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Acciones</th>
+                {esSuperAdmin && <th style={styles.th}>Empresa</th>}
+                <th style={styles.th}>Código</th>
+                <th style={styles.th}>Equipo</th>
+                <th style={styles.th}>Tipo</th>
+                <th style={styles.th}>Estado original</th>
+                <th style={styles.th}>Eliminado el</th>
+                <th style={styles.th}>Eliminado por</th>
+                <th style={styles.th}>Acciones</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
-              {equiposFiltrados.map((equipo) => {
-                const empresa = empresas.find(e => e.id === equipo.empresa_id);
-                const fechaEliminacion = new Date(equipo.eliminado_en).toLocaleString();
-                return (
-                  <tr key={equipo.id} className="hover:bg-gray-50">
-                    {esSuperAdmin && <td className="px-4 py-3 text-sm">{empresa?.nombre || '-'}</td>}
-                    <td className="px-4 py-3 text-sm font-medium">{equipo.codigo || '-'}</td>
-                    <td className="px-4 py-3 text-sm">{equipo.nombre_equipo || '-'}</td>
-                    <td className="px-4 py-3 text-sm">{equipo.tipo || '-'}</td>
-                    <td className="px-4 py-3 text-sm">{equipo.estado || '-'}</td>
-                    <td className="px-4 py-3 text-sm">{fechaEliminacion}</td>
-                    <td className="px-4 py-3 text-sm">{equipo.eliminado_por_nombre || '-'}</td>
-                    <td className="px-4 py-3 text-sm">
-                      <button
-                        onClick={() => handleRestaurar(equipo)}
-                        className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded-lg mr-2 text-sm"
-                      >
-                        Restaurar
-                      </button>
-                      <button
-                        onClick={() => handleEliminarPermanente(equipo)}
-                        className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-lg text-sm"
-                      >
-                        Eliminar permanentemente
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
+            <tbody>
+              {equiposFiltrados.length === 0 ? (
+                <tr>
+                  <td colSpan={esSuperAdmin ? 8 : 7} style={styles.emptyCell}>
+                    No hay equipos en la papelera
+                  </td>
+                </tr>
+              ) : (
+                equiposFiltrados.map((equipo) => {
+                  const empresa = empresas.find(e => e.id === equipo.empresa_id);
+                  const fechaEliminacion = new Date(equipo.eliminado_en).toLocaleString();
+                  return (
+                    <tr key={equipo.id} style={styles.tr}>
+                      {esSuperAdmin && <td style={styles.td}>{empresa?.nombre || '-'}</td>}
+                      <td style={{ ...styles.td, fontWeight: '500' }}>{equipo.codigo || '-'}</td>
+                      <td style={styles.td}>{equipo.nombre_equipo || '-'}</td>
+                      <td style={styles.td}>{equipo.tipo || '-'}</td>
+                      <td style={styles.td}>{equipo.estado || '-'}</td>
+                      <td style={styles.td}>{fechaEliminacion}</td>
+                      <td style={styles.td}>{equipo.eliminado_por_nombre || '-'}</td>
+                      <td style={styles.td}>
+                        <button onClick={() => handleRestaurar(equipo)} style={styles.btnSuccess}>
+                          Restaurar
+                        </button>
+                        <button onClick={() => handleEliminarPermanente(equipo)} style={styles.btnDanger}>
+                          Eliminar permanentemente
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
-          {equiposFiltrados.length === 0 && (
-            <div className="text-center py-8 text-gray-500">No hay equipos en la papelera</div>
-          )}
         </div>
       </div>
     </div>
   );
 }
 
+// ==========================================
+// 3. ESTILOS
+// ==========================================
+const styles = {
+  container: {
+    padding: '24px',
+  },
+  header: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '24px',
+    flexWrap: 'wrap',
+    gap: '16px',
+  },
+  title: {
+    fontSize: '24px',
+    fontWeight: 'bold',
+    color: '#1f2937',
+    margin: '0 0 4px 0',
+  },
+  subtitle: {
+    color: '#6b7280',
+    fontSize: '14px',
+    margin: 0,
+  },
+  mensajeExito: {
+    backgroundColor: '#d1fae5',
+    color: '#065f46',
+    padding: '12px 16px',
+    borderRadius: '8px',
+    marginBottom: '20px',
+  },
+  searchContainer: {
+    backgroundColor: 'white',
+    borderRadius: '8px',
+    padding: '16px',
+    marginBottom: '20px',
+    boxShadow: '0 1px 2px 0 rgba(0,0,0,0.05)',
+  },
+  searchWrapper: {
+    maxWidth: '300px',
+  },
+  input: {
+    width: '100%',
+    padding: '8px 12px',
+    border: '1px solid #d1d5db',
+    borderRadius: '8px',
+    fontSize: '14px',
+    outline: 'none',
+  },
+  tableContainer: {
+    backgroundColor: 'white',
+    borderRadius: '8px',
+    overflow: 'hidden',
+    boxShadow: '0 1px 2px 0 rgba(0,0,0,0.05)',
+  },
+  tableWrapper: {
+    overflowX: 'auto',
+  },
+  table: {
+    width: '100%',
+    borderCollapse: 'collapse',
+  },
+  thead: {
+    backgroundColor: '#f9fafb',
+  },
+  th: {
+    textAlign: 'left',
+    padding: '12px 16px',
+    fontSize: '12px',
+    fontWeight: '600',
+    color: '#6b7280',
+    borderBottom: '1px solid #e5e7eb',
+  },
+  td: {
+    padding: '12px 16px',
+    fontSize: '14px',
+    color: '#374151',
+    borderBottom: '1px solid #e5e7eb',
+  },
+  tr: {
+    transition: 'background-color 0.2s',
+  },
+  emptyCell: {
+    textAlign: 'center',
+    padding: '60px',
+    color: '#9ca3af',
+  },
+  btnSuccess: {
+    backgroundColor: '#059669',
+    color: 'white',
+    padding: '6px 12px',
+    borderRadius: '6px',
+    border: 'none',
+    cursor: 'pointer',
+    fontSize: '12px',
+    marginRight: '8px',
+  },
+  btnDanger: {
+    backgroundColor: '#dc2626',
+    color: 'white',
+    padding: '6px 12px',
+    borderRadius: '6px',
+    border: 'none',
+    cursor: 'pointer',
+    fontSize: '12px',
+  },
+  cargando: {
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    height: '256px',
+    color: '#6b7280',
+  },
+};
+
+// ==========================================
+// 4. EXPORTACIÓN
+// ==========================================
 export default Papelera;

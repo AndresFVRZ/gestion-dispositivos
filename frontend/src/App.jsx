@@ -4,6 +4,8 @@ import Sidebar from './components/Layout/Sidebar';
 import Login from './pages/Login';
 import Equipos from './pages/Equipos';
 import SuperAdminDashboard from './pages/SuperAdminDashboard';
+import GestionDashboard from './pages/GestionDashboard';
+import VisualizadorDashboard from './pages/VisualizadorDashboard';
 import Historial from './pages/Historial';
 import Usuarios from './pages/Usuarios';
 import Papelera from './pages/Papelera';
@@ -30,7 +32,12 @@ function AppContent() {
   const { usuario, cargando } = useAuth();
 
   if (cargando) {
-    return <div className="app-loading">Cargando...</div>;
+    return (
+      <div className="loading-container">
+        <div className="spinner"></div>
+        <p>Cargando sistema...</p>
+      </div>
+    );
   }
 
   if (!usuario) {
@@ -46,6 +53,7 @@ function AppContent() {
     </div>
   );
 
+  // SUPER ADMIN
   if (usuario.rol === 'super_admin') {
     return (
       <Layout>
@@ -61,6 +69,20 @@ function AppContent() {
     );
   }
 
+  // GESTIÓN
+  if (usuario.rol === 'gestion') {
+    return (
+      <Layout>
+        <Routes>
+          <Route path="/" element={<Navigate to="/equipos" />} />
+          <Route path="/equipos" element={<Equipos />} />
+          <Route path="/historial" element={<Historial />} />
+        </Routes>
+      </Layout>
+    );
+  }
+
+  // VISUALIZADOR
   return (
     <Layout>
       <Routes>
@@ -73,3 +95,48 @@ function AppContent() {
 }
 
 export default App;
+
+// ============================================
+// ESTILOS DEL COMPONENTE
+// ============================================
+const appStyles = document.createElement('style');
+appStyles.textContent = `
+  .loading-container {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+    color: white;
+  }
+
+  .spinner {
+    width: 48px;
+    height: 48px;
+    border: 4px solid rgba(255,255,255,0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: 16px;
+  }
+
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
+  .app-layout {
+    display: flex;
+    min-height: 100vh;
+  }
+
+  .app-main {
+    flex: 1;
+    margin-left: 260px;
+    padding: 24px;
+    background: #f1f5f9;
+    min-height: 100vh;
+  }
+`;
+document.head.appendChild(appStyles);

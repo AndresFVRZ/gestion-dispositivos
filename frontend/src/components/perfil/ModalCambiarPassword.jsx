@@ -1,10 +1,9 @@
-// src/components/Perfil/ModalCambiarPassword.jsx
 import React, { useState } from 'react';
 import { cambiarPassword } from '../../services/authService';
 import { useAuth } from '../../context/AuthContext';
 
 const ModalCambiarPassword = ({ isOpen, onClose }) => {
-  const { usuario, token } = useAuth();
+  const { usuario } = useAuth();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -52,76 +51,55 @@ const ModalCambiarPassword = ({ isOpen, onClose }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-bold text-gray-800">Cambiar Contraseña</h2>
-          <button
-            onClick={onClose}
-            className="text-gray-500 hover:text-gray-700 text-xl"
-          >
-            ✕
-          </button>
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content modal-password" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3>Cambiar Contraseña</h3>
+          <button className="modal-close" onClick={onClose}>×</button>
         </div>
 
-        {error && (
-          <div className="bg-red-100 text-red-700 p-3 rounded mb-4 text-sm">
-            {error}
-          </div>
-        )}
-        {success && (
-          <div className="bg-green-100 text-green-700 p-3 rounded mb-4 text-sm">
-            {success}
-          </div>
-        )}
+        {error && <div className="modal-error">{error}</div>}
+        {success && <div className="modal-success">{success}</div>}
 
         <form onSubmit={handleSubmit}>
-          <div className="mb-4">
-            <label className="label">Contraseña actual</label>
-            <input
-              type="password"
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              className="input"
-              required
-            />
+          <div className="modal-body">
+            <div className="form-group">
+              <label>Contraseña actual</label>
+              <input
+                type="password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                placeholder="Ingrese su contraseña actual"
+                required
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Nueva contraseña</label>
+              <input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Mínimo 6 caracteres"
+                required
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Confirmar nueva contraseña</label>
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Repita la nueva contraseña"
+                required
+              />
+            </div>
           </div>
 
-          <div className="mb-4">
-            <label className="label">Nueva contraseña</label>
-            <input
-              type="password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              className="input"
-              required
-            />
-          </div>
-
-          <div className="mb-6">
-            <label className="label">Confirmar nueva contraseña</label>
-            <input
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              className="input"
-              required
-            />
-          </div>
-
-          <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-100"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={cargando}
-              className="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 disabled:opacity-50"
-            >
+          <div className="modal-footer">
+            <button type="button" className="btn-cancel" onClick={onClose}>Cancelar</button>
+            <button type="submit" className="btn-save" disabled={cargando}>
               {cargando ? 'Actualizando...' : 'Actualizar contraseña'}
             </button>
           </div>
@@ -132,3 +110,70 @@ const ModalCambiarPassword = ({ isOpen, onClose }) => {
 };
 
 export default ModalCambiarPassword;
+
+// ============================================
+// ESTILOS DEL COMPONENTE
+// ============================================
+const modalStyles = document.createElement('style');
+modalStyles.textContent = `
+  .modal-password {
+    max-width: 420px;
+  }
+
+  .modal-error {
+    background: #fef2f2;
+    color: #dc2626;
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    margin: 0 20px 16px 20px;
+    border-left: 3px solid #dc2626;
+  }
+
+  .modal-success {
+    background: #dcfce7;
+    color: #166534;
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    margin: 0 20px 16px 20px;
+    border-left: 3px solid #10b981;
+  }
+
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 20px;
+  }
+
+  .form-group label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: #334155;
+    margin-bottom: 0;
+  }
+
+  .form-group input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    font-size: 14px;
+    outline: none;
+    background: white;
+    transition: all 0.2s;
+  }
+
+  .form-group input:focus {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+  }
+
+  .form-group input::placeholder {
+    color: #94a3b8;
+    font-size: 13px;
+  }
+`;
+document.head.appendChild(modalStyles);
