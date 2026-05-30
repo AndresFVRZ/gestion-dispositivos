@@ -20,9 +20,8 @@ const LOGO_MAP = {
   'inprosalud plus':  'InprosaludPlus.png',
   'inprosalud':       'InprosaludPlus.png',
   'sertti':           'Sertti.png',
-  'solucionescorp':   'solucionescorp.png',
-  'soluciones corp':  'solucionescorp.png',
-  'simadrid':         'simadrid.png',
+  'sci':              'solucionescorp.png',
+  'si madrid':        'simadrid.png',
 };
 
 const getLogoUrl = (nombreEmpresa) => {
@@ -35,11 +34,11 @@ const getLogoUrl = (nombreEmpresa) => {
 const TODOS_LOGOS = [
   { archivo: 'Accesalud.png',     nombre: 'Accesalud' },
   { archivo: 'Emtra.png',         nombre: 'EMTRA' },
-  { archivo: 'EmtraSur.png',      nombre: 'EmtraSur' },
+  { archivo: 'EmtraSur.png',      nombre: 'EMTRASUR' },
   { archivo: 'InprosaludPlus.png',nombre: 'Inprosalud Plus' },
   { archivo: 'Sertti.png',        nombre: 'Sertti' },
-  { archivo: 'solucionescorp.png',nombre: 'Soluciones Corp' },
-  { archivo: 'simadrid.png',      nombre: 'Simadrid' },
+  { archivo: 'solucionescorp.png',nombre: 'SCI' },
+  { archivo: 'simadrid.png',      nombre: 'SI MADRID' },
 ];
 
 const BASE_URL = process.env.APP_URL_BACKEND || 'http://localhost:5000';

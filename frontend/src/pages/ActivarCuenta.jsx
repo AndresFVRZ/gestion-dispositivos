@@ -12,11 +12,11 @@ import logoSimadrid    from '../assets/simadrid.png';
 const TODOS_LOGOS = [
   { src: logoAccesalud,  nombre: 'Accesalud' },
   { src: logoEmtra,      nombre: 'EMTRA' },
-  { src: logoEmtraSur,   nombre: 'EmtraSur' },
+  { src: logoEmtraSur,   nombre: 'EMTRASUR' },
   { src: logoInprosalud, nombre: 'Inprosalud Plus' },
   { src: logoSertti,     nombre: 'Sertti' },
-  { src: logoSoluciones, nombre: 'Soluciones Corp' },
-  { src: logoSimadrid,   nombre: 'Simadrid' },
+  { src: logoSoluciones, nombre: 'SCI' },
+  { src: logoSimadrid,   nombre: 'SI MADRID' },
 ];
 
 function ActivarCuenta() {

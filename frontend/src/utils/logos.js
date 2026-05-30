@@ -14,9 +14,8 @@ const LOGOS = {
   'inprosalud plus':  logoInprosalud,
   'inprosalud':       logoInprosalud,
   'sertti':           logoSertti,
-  'solucionescorp':   logoSoluciones,
-  'soluciones corp':  logoSoluciones,
-  'simadrid':         logoSimadrid,
+  'sci':              logoSoluciones,
+  'si madrid':        logoSimadrid,
 };
 
 /**

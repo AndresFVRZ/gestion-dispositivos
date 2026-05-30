@@ -8,6 +8,7 @@ import { getEmpresas } from '../services/empresasService';
 import { useAuth } from '../context/AuthContext';
 import ConfirmModal from '../components/Common/ConfirmModal';
 import ImportModal from '../components/Common/ImportModal';
+import { calcularGarantia, textoGarantia, colorGarantia } from '../utils/garantia';
 import * as XLSX from 'xlsx';
 
 // ==========================================
@@ -486,6 +487,7 @@ function Equipos() {
                 <th>Equipo</th>
                 <th>Tipo</th>
                 <th>Estado</th>
+                <th>Garantía</th>
                 <th>Asignado a</th>
                 <th>Ubicación</th>
                 <th>Acciones</th>
@@ -495,7 +497,7 @@ function Equipos() {
               {equiposPaginados.length === 0 ? (
                 <tr>
                   <td colSpan={
-                    (modoSeleccion ? 1 : 0) + (esSuperAdmin ? 1 : 0) + 6
+                    (modoSeleccion ? 1 : 0) + (esSuperAdmin ? 1 : 0) + 7
                   } className="empty-cell">
                     No hay equipos registrados
                   </td>
@@ -532,6 +534,16 @@ function Equipos() {
                           {e.estado || '-'}
                         </span>
                       </td>
+                      <td>{(() => {
+                        const g = calcularGarantia(e.fecha_asignacion, e.garantia);
+                        if (!g.tiene) return <span style={{ color: '#94a3b8', fontSize: '11px' }}>-</span>;
+                        const c = colorGarantia(g.estado);
+                        return (
+                          <span style={{ background: c.bg, color: c.color, border: `1px solid ${c.border}`, borderRadius: '6px', padding: '2px 7px', fontSize: '11px', fontWeight: '500', whiteSpace: 'nowrap' }}>
+                            {g.vencida ? 'Vencida' : textoGarantia(g)}
+                          </span>
+                        );
+                      })()}</td>
                       <td>{e.asignado_a || '-'}</td>
                       <td>{e.ubicacion || '-'}</td>
                       <td className="acciones-cell">
@@ -677,8 +689,51 @@ function Equipos() {
               <div><strong>RAM:</strong> {equipoDetalle.ram || '-'}</div>
               <div><strong>Disco Duro:</strong> {equipoDetalle.disco_duro || '-'}</div>
               <div><strong>Sistema Operativo:</strong> {equipoDetalle.sistema_operativo || '-'}</div>
-              <div><strong>Garantía:</strong> {equipoDetalle.garantia || '-'}</div>
               <div><strong>Empresa:</strong> {empresas.find(e => e.id === equipoDetalle.empresa_id)?.nombre || '-'}</div>
+              <div style={{ gridColumn: '1 / -1' }}>
+                {(() => {
+                  const g = calcularGarantia(equipoDetalle.fecha_asignacion, equipoDetalle.garantia);
+                  if (!g.tiene) return <><strong>Garantía:</strong> <span style={{ color: '#94a3b8' }}>Sin información</span></>;
+                  const c = colorGarantia(g.estado);
+                  return (
+                    <div style={{ background: c.bg, border: `1px solid ${c.border}`, borderRadius: '10px', padding: '12px 16px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '8px' }}>
+                        <div>
+                          <p style={{ margin: '0 0 4px', fontSize: '11px', fontWeight: '600', color: c.color, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                            {g.vencida ? 'Garantía vencida' : 'Garantía vigente'}
+                          </p>
+                          <p style={{ margin: 0, fontSize: '20px', fontWeight: '700', color: c.color }}>
+                            {g.vencida
+                              ? `Venció hace ${textoGarantia(g)}`
+                              : textoGarantia(g)}
+                          </p>
+                          {!g.vencida && (
+                            <div style={{ display: 'flex', gap: '16px', marginTop: '8px' }}>
+                              {g.años > 0 && <div style={{ textAlign: 'center' }}>
+                                <p style={{ margin: 0, fontSize: '22px', fontWeight: '700', color: c.color }}>{g.años}</p>
+                                <p style={{ margin: 0, fontSize: '10px', color: c.color, opacity: 0.8 }}>{g.años === 1 ? 'AÑO' : 'AÑOS'}</p>
+                              </div>}
+                              {g.meses > 0 && <div style={{ textAlign: 'center' }}>
+                                <p style={{ margin: 0, fontSize: '22px', fontWeight: '700', color: c.color }}>{g.meses}</p>
+                                <p style={{ margin: 0, fontSize: '10px', color: c.color, opacity: 0.8 }}>{g.meses === 1 ? 'MES' : 'MESES'}</p>
+                              </div>}
+                              <div style={{ textAlign: 'center' }}>
+                                <p style={{ margin: 0, fontSize: '22px', fontWeight: '700', color: c.color }}>{g.dias}</p>
+                                <p style={{ margin: 0, fontSize: '10px', color: c.color, opacity: 0.8 }}>{g.dias === 1 ? 'DÍA' : 'DÍAS'}</p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <p style={{ margin: 0, fontSize: '11px', color: c.color, opacity: 0.7 }}>Vence el</p>
+                          <p style={{ margin: 0, fontSize: '13px', fontWeight: '600', color: c.color }}>{g.fechaFinTexto}</p>
+                          <p style={{ margin: '4px 0 0', fontSize: '11px', color: c.color, opacity: 0.7 }}>{equipoDetalle.garantia} meses de garantía</p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
               {(() => {
                 const extras = parsearCamposExtra(equipoDetalle.especificaciones);
                 return extras.length > 0 ? (
