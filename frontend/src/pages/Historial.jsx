@@ -4,6 +4,8 @@
 import React, { useState, useEffect } from 'react';
 import { getHistorial } from '../services/historialService';
 import { useAuth } from '../context/AuthContext';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 // ==========================================
 // 2. LÓGICA DEL COMPONENTE
@@ -14,6 +16,7 @@ function Historial() {
   const [filtroAccion, setFiltroAccion] = useState('todos');
   const [fechaDesde, setFechaDesde] = useState('');
   const [fechaHasta, setFechaHasta] = useState('');
+  const [generandoPDF, setGenerandoPDF] = useState(false);
   const { usuario } = useAuth();
 
   useEffect(() => {
@@ -61,15 +64,124 @@ function Historial() {
     return map[accion] || accion;
   };
 
+  const descargarPDF = async () => {
+    setGenerandoPDF(true);
+    try {
+      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+
+      // Encabezado
+      doc.setFillColor(30, 64, 175);
+      doc.rect(0, 0, 297, 22, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.text('EMTRA — Historial de Acciones', 14, 14);
+
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      const fechaGen = new Date().toLocaleString('es-CO');
+      doc.text(`Generado: ${fechaGen}`, 297 - 14, 14, { align: 'right' });
+
+      // Filtros aplicados
+      doc.setTextColor(100, 100, 100);
+      doc.setFontSize(8);
+      let filtroTexto = `Total registros: ${historial.length}`;
+      if (filtroAccion !== 'todos') filtroTexto += `  |  Acción: ${filtroAccion}`;
+      if (fechaDesde) filtroTexto += `  |  Desde: ${fechaDesde}`;
+      if (fechaHasta) filtroTexto += `  |  Hasta: ${fechaHasta}`;
+      doc.text(filtroTexto, 14, 28);
+
+      const accionColor = (accion) => {
+        const map = {
+          'CREAR':               [16, 185, 129],
+          'EDITAR':              [59, 130, 246],
+          'ELIMINAR':            [245, 158, 11],
+          'RESTAURAR':           [139, 92, 246],
+          'ELIMINAR_PERMANENTE': [239, 68, 68],
+        };
+        return map[accion] || [100, 116, 139];
+      };
+
+      autoTable(doc, {
+        startY: 32,
+        head: [['Fecha', 'Usuario', 'Rol', 'Acción', 'Equipo', 'Código', 'Detalles', 'IP']],
+        body: historial.map(item => [
+          new Date(item.fecha).toLocaleString('es-CO'),
+          item.usuario_nombre || '-',
+          item.usuario_rol || '-',
+          item.accion_texto || item.accion || '-',
+          item.equipo_nombre || '-',
+          item.equipo_codigo || '-',
+          item.detalles || '-',
+          item.ip_address || '-',
+        ]),
+        styles: { fontSize: 8, cellPadding: 3, overflow: 'linebreak' },
+        headStyles: { fillColor: [30, 64, 175], textColor: 255, fontStyle: 'bold', fontSize: 8 },
+        alternateRowStyles: { fillColor: [248, 250, 252] },
+        columnStyles: {
+          0: { cellWidth: 32 },
+          1: { cellWidth: 30 },
+          2: { cellWidth: 22 },
+          3: { cellWidth: 28 },
+          4: { cellWidth: 35 },
+          5: { cellWidth: 22 },
+          6: { cellWidth: 'auto' },
+          7: { cellWidth: 28 },
+        },
+        didParseCell: (data) => {
+          if (data.column.index === 3 && data.section === 'body') {
+            const accion = historial[data.row.index]?.accion;
+            const [r, g, b] = accionColor(accion);
+            data.cell.styles.textColor = [r, g, b];
+            data.cell.styles.fontStyle = 'bold';
+          }
+        },
+      });
+
+      // Pie de página
+      const pageCount = doc.internal.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(7);
+        doc.setTextColor(160, 160, 160);
+        doc.text(`Página ${i} de ${pageCount}`, 297 / 2, 205, { align: 'center' });
+      }
+
+      const nombreArchivo = `historial_${new Date().toISOString().split('T')[0]}.pdf`;
+      doc.save(nombreArchivo);
+    } finally {
+      setGenerandoPDF(false);
+    }
+  };
+
   if (cargando) {
     return <div style={styles.cargando}>Cargando historial...</div>;
   }
 
   return (
     <div style={styles.container}>
+
+      {generandoPDF && (
+        <div style={styles.overlay}>
+          <div style={styles.overlayBox}>
+            <div style={styles.spinner} />
+            <p style={styles.overlayMsg}>Generando PDF...</p>
+          </div>
+        </div>
+      )}
+
       <div style={styles.header}>
-        <h1 style={styles.title}>Historial de Acciones</h1>
-        <p style={styles.subtitle}>Registro de todas las acciones del sistema</p>
+        <div>
+          <h1 style={styles.title}>Historial de Acciones</h1>
+          <p style={styles.subtitle}>Registro de todas las acciones del sistema</p>
+        </div>
+        <button
+          onClick={descargarPDF}
+          disabled={generandoPDF || historial.length === 0}
+          style={styles.pdfButton}
+        >
+          Descargar PDF
+        </button>
       </div>
 
       {/* Filtros */}
@@ -174,6 +286,11 @@ const styles = {
   },
   header: {
     marginBottom: '24px',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: '16px',
+    flexWrap: 'wrap',
   },
   title: {
     fontSize: '24px',
@@ -288,9 +405,46 @@ const styles = {
     height: '256px',
     color: '#6b7280',
   },
+  pdfButton: {
+    backgroundColor: '#dc2626',
+    color: 'white',
+    fontWeight: '600',
+    padding: '9px 20px',
+    borderRadius: '8px',
+    border: 'none',
+    cursor: 'pointer',
+    fontSize: '14px',
+    whiteSpace: 'nowrap',
+    alignSelf: 'flex-start',
+  },
+  overlay: {
+    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999,
+  },
+  overlayBox: {
+    background: 'white', borderRadius: '16px', padding: '40px 48px',
+    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px',
+    boxShadow: '0 20px 60px rgba(0,0,0,0.3)', minWidth: '240px',
+  },
+  spinner: {
+    width: '52px', height: '52px', border: '5px solid #e2e8f0',
+    borderTopColor: '#dc2626', borderRadius: '50%',
+    animation: 'spin 0.8s linear infinite',
+  },
+  overlayMsg: {
+    fontSize: '15px', fontWeight: '500', color: '#334155',
+    textAlign: 'center', margin: 0,
+  },
 };
 
 // ==========================================
-// 4. EXPORTACIÓN
+// 4. ESTILOS GLOBALES (spinner)
+// ==========================================
+const historialStyles = document.createElement('style');
+historialStyles.textContent = `@keyframes spin { to { transform: rotate(360deg); } }`;
+document.head.appendChild(historialStyles);
+
+// ==========================================
+// 5. EXPORTACIÓN
 // ==========================================
 export default Historial;

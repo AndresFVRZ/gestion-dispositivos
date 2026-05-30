@@ -37,17 +37,29 @@ router.post('/login', async (req, res) => {
         
         const user = result.rows[0];
         const validPassword = await bcrypt.compare(password, user.password_hash);
-        
+
         if (!validPassword) {
             return res.status(401).json({ success: false, message: 'Credenciales incorrectas' });
         }
-        
+
+        let empresasAsignadas = [];
+        if (user.rol_nombre !== 'super_admin') {
+            const empresasResult = await db.query(
+                `SELECT e.id, e.nombre
+                 FROM usuario_empresas ue
+                 JOIN empresas e ON ue.empresa_id = e.id
+                 WHERE ue.usuario_id = $1`,
+                [user.id]
+            );
+            empresasAsignadas = empresasResult.rows;
+        }
+
         const token = jwt.sign(
-            { id: user.id, email: user.email, nombre: user.nombre, rol: user.rol_nombre },
+            { id: user.id, email: user.email, nombre: user.nombre, rol: user.rol_nombre, empresas: empresasAsignadas },
             process.env.SECRET_KEY,
             { expiresIn: '8h' }
         );
-        
+
         res.json({
             success: true,
             token,
@@ -55,7 +67,8 @@ router.post('/login', async (req, res) => {
                 id: user.id,
                 nombre: user.nombre,
                 email: user.email,
-                rol: user.rol_nombre
+                rol: user.rol_nombre,
+                empresas: empresasAsignadas
             }
         });
     } catch (error) {

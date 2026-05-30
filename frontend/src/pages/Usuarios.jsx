@@ -3,9 +3,11 @@
 // ============================================
 
 import React, { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
 import { getUsuarios, crearUsuario, actualizarUsuario, eliminarUsuario } from '../services/usuariosService';
 import { getEmpresas } from '../services/empresasService';
 import { useAuth } from '../context/AuthContext';
+import ConfirmModal from '../components/Common/ConfirmModal';
 
 function Usuarios() {
   const { usuario: usuarioActual } = useAuth();
@@ -14,6 +16,7 @@ function Usuarios() {
   const [cargando, setCargando] = useState(true);
   const [filtro, setFiltro] = useState('');
   
+  const [confirm, setConfirm] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [modalMode, setModalMode] = useState('create');
   const [selectedUsuario, setSelectedUsuario] = useState(null);
@@ -99,19 +102,22 @@ function Usuarios() {
     setShowModal(true);
   };
 
-  const handleDelete = async (id) => {
-    if (window.confirm('¿Eliminar este usuario?')) {
-      try {
-        const result = await eliminarUsuario(id);
-        if (result && result.success) {
-          cargarDatos();
-        } else {
-          alert(result?.message || 'Error al eliminar usuario');
-        }
-      } catch (error) {
-        alert('Error al eliminar usuario');
-      }
-    }
+  const handleDelete = (id) => {
+    const u = usuarios.find(x => x.id === id);
+    setConfirm({
+      titulo: 'Eliminar usuario',
+      mensaje: `¿Desactivar a "${u?.nombre || 'este usuario'}"? Ya no podrá iniciar sesión.`,
+      variante: 'danger',
+      textConfirmar: 'Eliminar',
+      onConfirm: async () => {
+        setConfirm(null);
+        try {
+          const result = await eliminarUsuario(id);
+          if (result?.success) { toast.success('Usuario eliminado'); cargarDatos(); }
+          else toast.error(result?.message || 'Error al eliminar usuario');
+        } catch { toast.error('Error al eliminar usuario'); }
+      },
+    });
   };
 
   const handleSubmit = async (e) => {
@@ -120,23 +126,16 @@ function Usuarios() {
     console.log('📤 Enviando datos:', formData);
     
     if (!formData.nombre || !formData.email) {
-      alert('Nombre y email son obligatorios');
-      return;
+      toast.error('Nombre y email son obligatorios'); return;
     }
-    
     if (modalMode === 'create' && !formData.password) {
-      alert('La contraseña es obligatoria');
-      return;
+      toast.error('La contraseña es obligatoria'); return;
     }
-    
     if (formData.password && formData.password.length < 6) {
-      alert('La contraseña debe tener al menos 6 caracteres');
-      return;
+      toast.error('La contraseña debe tener al menos 6 caracteres'); return;
     }
-    
     if (formData.rol !== 'super_admin' && formData.empresas_ids.length === 0) {
-      alert('Debe seleccionar al menos una empresa');
-      return;
+      toast.error('Debe seleccionar al menos una empresa'); return;
     }
     
     try {
@@ -152,24 +151,15 @@ function Usuarios() {
       console.log('📥 Resultado del servidor:', result);
       
       if (result && result.success) {
-        console.log('✅ Usuario guardado exitosamente');
         setShowModal(false);
-        setFormData({
-          nombre: '',
-          email: '',
-          password: '',
-          rol: 'visualizador',
-          empresas_ids: []
-        });
+        setFormData({ nombre: '', email: '', password: '', rol: 'visualizador', empresas_ids: [] });
+        toast.success(modalMode === 'create' ? 'Usuario creado exitosamente' : 'Usuario actualizado');
         await cargarDatos();
       } else {
-        const errorMsg = result?.message || 'Error al guardar usuario';
-        console.error('❌ Error:', errorMsg);
-        alert(errorMsg);
+        toast.error(result?.message || 'Error al guardar usuario');
       }
     } catch (error) {
-      console.error('❌ Error en catch:', error);
-      alert(error.response?.data?.message || error.message || 'Error al guardar usuario');
+      toast.error(error.response?.data?.message || error.message || 'Error al guardar usuario');
     }
   };
 
@@ -219,6 +209,15 @@ function Usuarios() {
 
   return (
     <div className="usuarios-container">
+      <ConfirmModal
+        open={confirm !== null}
+        titulo={confirm?.titulo}
+        mensaje={confirm?.mensaje}
+        variante={confirm?.variante}
+        textConfirmar={confirm?.textConfirmar}
+        onConfirm={confirm?.onConfirm}
+        onCancel={() => setConfirm(null)}
+      />
       <div className="usuarios-header">
         <h1 className="usuarios-title">Usuarios</h1>
         <div className="usuarios-actions">

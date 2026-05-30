@@ -23,9 +23,12 @@ const getHistorial = async (req, res) => {
         let paramCount = 1;
         
         if (usuario.rol !== 'super_admin') {
-            query += ` AND h.empresa_id = $${paramCount}`;
-            params.push(usuario.empresa_id);
-            paramCount++;
+            const empresaIds = (usuario.empresas || []).map(e => e.id);
+            if (empresaIds.length > 0) {
+                query += ` AND h.empresa_id = ANY($${paramCount}::int[])`;
+                params.push(empresaIds);
+                paramCount++;
+            }
         }
         
         if (accion && accion !== 'todos') {

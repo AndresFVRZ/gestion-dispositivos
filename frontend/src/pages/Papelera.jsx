@@ -2,9 +2,11 @@
 // 1. IMPORTACIONES
 // ==========================================
 import React, { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
 import { getPapelera, restaurarEquipo, eliminarPermanente } from '../services/equiposService';
 import { getEmpresas } from '../services/empresasService';
 import { useAuth } from '../context/AuthContext';
+import ConfirmModal from '../components/Common/ConfirmModal';
 
 // ==========================================
 // 2. LÓGICA DEL COMPONENTE
@@ -16,6 +18,9 @@ function Papelera() {
   const [cargando, setCargando] = useState(true);
   const [mensaje, setMensaje] = useState('');
   const [filtroBusqueda, setFiltroBusqueda] = useState('');
+  const [confirm, setConfirm] = useState(null);
+  const [modoSeleccion, setModoSeleccion] = useState(false);
+  const [seleccionados, setSeleccionados] = useState([]);
 
   const esSuperAdmin = usuario?.rol === 'super_admin';
 
@@ -39,38 +44,99 @@ function Papelera() {
     }
   };
 
-  const handleRestaurar = async (equipo) => {
-    if (window.confirm(`Restaurar "${equipo.codigo} - ${equipo.nombre_equipo}"?`)) {
-      try {
-        const result = await restaurarEquipo(equipo.id);
-        if (result.success) {
-          setMensaje(`Equipo ${equipo.codigo} restaurado`);
-          cargarDatos();
-          setTimeout(() => setMensaje(''), 3000);
-        } else {
-          alert(result.message || 'Error al restaurar');
-        }
-      } catch (error) {
-        alert('Error de conexión');
-      }
+  const handleRestaurar = (equipo) => {
+    setConfirm({
+      titulo: 'Restaurar equipo',
+      mensaje: `¿Restaurar "${equipo.nombre_equipo}" del inventario activo?`,
+      variante: 'info',
+      textConfirmar: 'Restaurar',
+      onConfirm: async () => {
+        setConfirm(null);
+        try {
+          const result = await restaurarEquipo(equipo.id);
+          if (result.success) { toast.success(`Equipo ${equipo.codigo} restaurado`); cargarDatos(); }
+          else toast.error(result.message || 'Error al restaurar');
+        } catch { toast.error('Error de conexión'); }
+      },
+    });
+  };
+
+  const handleEliminarPermanente = (equipo) => {
+    setConfirm({
+      titulo: 'Eliminar permanentemente',
+      mensaje: `Esta acción no se puede deshacer. ¿Eliminar definitivamente "${equipo.nombre_equipo}"?`,
+      variante: 'danger',
+      textConfirmar: 'Eliminar definitivamente',
+      onConfirm: async () => {
+        setConfirm(null);
+        try {
+          const result = await eliminarPermanente(equipo.id);
+          if (result.success) { toast.success(`Equipo ${equipo.codigo} eliminado permanentemente`); cargarDatos(); }
+          else toast.error(result.message || 'Error al eliminar');
+        } catch { toast.error('Error de conexión'); }
+      },
+    });
+  };
+
+  const toggleModoSeleccion = () => {
+    setModoSeleccion(v => !v);
+    setSeleccionados([]);
+  };
+
+  const toggleSeleccion = (id) => {
+    setSeleccionados(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSeleccionarTodos = () => {
+    if (seleccionados.length === equiposFiltrados.length) {
+      setSeleccionados([]);
+    } else {
+      setSeleccionados(equiposFiltrados.map(e => e.id));
     }
   };
 
-  const handleEliminarPermanente = async (equipo) => {
-    if (window.confirm(`Eliminar permanentemente "${equipo.codigo} - ${equipo.nombre_equipo}"? Esta accion no se puede deshacer.`)) {
-      try {
-        const result = await eliminarPermanente(equipo.id);
-        if (result.success) {
-          setMensaje(`Equipo ${equipo.codigo} eliminado permanentemente`);
-          cargarDatos();
-          setTimeout(() => setMensaje(''), 3000);
-        } else {
-          alert(result.message || 'Error al eliminar');
+  const handleRestaurarSeleccionados = () => {
+    if (seleccionados.length === 0) return;
+    setConfirm({
+      titulo: 'Restaurar seleccionados',
+      mensaje: `¿Restaurar ${seleccionados.length} equipo(s) al inventario activo?`,
+      variante: 'info',
+      textConfirmar: `Restaurar ${seleccionados.length}`,
+      onConfirm: async () => {
+        setConfirm(null);
+        let restaurados = 0;
+        for (const id of seleccionados) {
+          try { const r = await restaurarEquipo(id); if (r.success) restaurados++; } catch (_) {}
         }
-      } catch (error) {
-        alert('Error de conexión');
-      }
-    }
+        toast.success(`${restaurados} equipo(s) restaurados`);
+        setSeleccionados([]);
+        setModoSeleccion(false);
+        cargarDatos();
+      },
+    });
+  };
+
+  const handleEliminarSeleccionados = () => {
+    if (seleccionados.length === 0) return;
+    setConfirm({
+      titulo: 'Eliminar permanentemente',
+      mensaje: `Esta acción no se puede deshacer. ¿Eliminar definitivamente ${seleccionados.length} equipo(s)?`,
+      variante: 'danger',
+      textConfirmar: `Eliminar ${seleccionados.length} definitivamente`,
+      onConfirm: async () => {
+        setConfirm(null);
+        let eliminados = 0;
+        for (const id of seleccionados) {
+          try { const r = await eliminarPermanente(id); if (r.success) eliminados++; } catch (_) {}
+        }
+        toast.success(`${eliminados} equipo(s) eliminados permanentemente`);
+        setSeleccionados([]);
+        setModoSeleccion(false);
+        cargarDatos();
+      },
+    });
   };
 
   const formatFecha = (fecha) => {
@@ -98,12 +164,53 @@ function Papelera() {
 
   return (
     <div className="papelera-container">
+      <ConfirmModal
+        open={confirm !== null}
+        titulo={confirm?.titulo}
+        mensaje={confirm?.mensaje}
+        variante={confirm?.variante}
+        textConfirmar={confirm?.textConfirmar}
+        onConfirm={confirm?.onConfirm}
+        onCancel={() => setConfirm(null)}
+      />
       <div className="papelera-header">
         <div>
           <h1 className="papelera-title">Papelera</h1>
           <p className="papelera-subtitle">Equipos eliminados</p>
         </div>
+        <button
+          className={modoSeleccion ? 'pap-btn-seleccion-activa' : 'pap-btn-seleccion'}
+          onClick={toggleModoSeleccion}
+        >
+          {modoSeleccion ? 'Cancelar selección' : 'Selección múltiple'}
+        </button>
       </div>
+
+      {modoSeleccion && (
+        <div className="pap-barra-seleccion">
+          <span className="pap-seleccion-info">
+            {seleccionados.length === 0
+              ? 'Selecciona los equipos que deseas restaurar o eliminar'
+              : `${seleccionados.length} equipo(s) seleccionado(s)`}
+          </span>
+          <div className="pap-barra-acciones">
+            <button
+              className="pap-btn-restaurar-masivo"
+              onClick={handleRestaurarSeleccionados}
+              disabled={seleccionados.length === 0}
+            >
+              Restaurar ({seleccionados.length})
+            </button>
+            <button
+              className="pap-btn-eliminar-masivo"
+              onClick={handleEliminarSeleccionados}
+              disabled={seleccionados.length === 0}
+            >
+              Eliminar definitivo ({seleccionados.length})
+            </button>
+          </div>
+        </div>
+      )}
 
       {mensaje && <div className="papelera-mensaje">{mensaje}</div>}
 
@@ -112,7 +219,7 @@ function Papelera() {
           type="text"
           className="papelera-filter-input"
           value={filtroBusqueda}
-          onChange={(e) => setFiltroBusqueda(e.target.value)}
+          onChange={(e) => { setFiltroBusqueda(e.target.value); }}
           placeholder="Buscar por nombre o codigo..."
         />
       </div>
@@ -122,6 +229,16 @@ function Papelera() {
           <table className="papelera-table">
             <thead>
               <tr>
+                {modoSeleccion && (
+                  <th className="pap-th-check">
+                    <input
+                      type="checkbox"
+                      className="pap-checkbox"
+                      checked={equiposFiltrados.length > 0 && seleccionados.length === equiposFiltrados.length}
+                      onChange={toggleSeleccionarTodos}
+                    />
+                  </th>
+                )}
                 {esSuperAdmin && <th>Empresa</th>}
                 <th>Codigo</th>
                 <th>Equipo</th>
@@ -134,15 +251,31 @@ function Papelera() {
             <tbody>
               {equiposFiltrados.length === 0 ? (
                 <tr>
-                  <td colSpan={esSuperAdmin ? 7 : 6} className="papelera-empty">
+                  <td colSpan={(modoSeleccion ? 1 : 0) + (esSuperAdmin ? 1 : 0) + 6} className="papelera-empty">
                     No hay equipos en la papelera
                   </td>
                 </tr>
               ) : (
                 equiposFiltrados.map((equipo) => {
                   const empresa = empresas.find(e => e.id === equipo.empresa_id);
+                  const seleccionado = seleccionados.includes(equipo.id);
                   return (
-                    <tr key={equipo.id}>
+                    <tr
+                      key={equipo.id}
+                      className={seleccionado ? 'pap-fila-sel' : ''}
+                      onClick={modoSeleccion ? () => toggleSeleccion(equipo.id) : undefined}
+                      style={modoSeleccion ? { cursor: 'pointer' } : {}}
+                    >
+                      {modoSeleccion && (
+                        <td className="pap-td-check" onClick={ev => ev.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            className="pap-checkbox"
+                            checked={seleccionado}
+                            onChange={() => toggleSeleccion(equipo.id)}
+                          />
+                        </td>
+                      )}
                       {esSuperAdmin && <td>{empresa?.nombre || '-'}</td>}
                       <td className="papelera-codigo">{equipo.codigo || '-'}</td>
                       <td className="papelera-equipo">{equipo.nombre_equipo || '-'}</td>
@@ -150,8 +283,8 @@ function Papelera() {
                       <td>{equipo.estado || '-'}</td>
                       <td className="papelera-fecha">{formatFecha(equipo.eliminado_en)}</td>
                       <td className="papelera-acciones">
-                        <button className="papelera-btn-restaurar" onClick={() => handleRestaurar(equipo)}>Restaurar</button>
-                        <button className="papelera-btn-eliminar" onClick={() => handleEliminarPermanente(equipo)}>Eliminar</button>
+                        {!modoSeleccion && <button className="papelera-btn-restaurar" onClick={() => handleRestaurar(equipo)}>Restaurar</button>}
+                        {!modoSeleccion && <button className="papelera-btn-eliminar" onClick={() => handleEliminarPermanente(equipo)}>Eliminar</button>}
                       </td>
                     </tr>
                   );
@@ -335,6 +468,41 @@ papeleraStyles.textContent = `
     color: #718096;
     font-size: 11px;
   }
+
+  /* Selección múltiple */
+  .pap-btn-seleccion {
+    padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: 500;
+    cursor: pointer; background: white; color: #475569;
+    border: 1px solid #e2e8f0; transition: background 0.15s;
+  }
+  .pap-btn-seleccion:hover { background: #f1f5f9; }
+  .pap-btn-seleccion-activa {
+    padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: 500;
+    cursor: pointer; background: #fef3c7; color: #b45309;
+    border: 1px solid #fcd34d;
+  }
+  .pap-barra-seleccion {
+    display: flex; align-items: center; justify-content: space-between;
+    background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px;
+    padding: 10px 14px; margin-bottom: 12px; gap: 12px; flex-wrap: wrap;
+  }
+  .pap-seleccion-info { font-size: 12px; font-weight: 500; color: #92400e; }
+  .pap-barra-acciones { display: flex; gap: 8px; flex-wrap: wrap; }
+  .pap-btn-restaurar-masivo {
+    background: #0369a1; color: white; border: none; border-radius: 6px;
+    padding: 6px 14px; font-size: 11px; font-weight: 600; cursor: pointer;
+  }
+  .pap-btn-restaurar-masivo:hover:not(:disabled) { background: #0284c7; }
+  .pap-btn-restaurar-masivo:disabled { background: #bae6fd; cursor: not-allowed; }
+  .pap-btn-eliminar-masivo {
+    background: #dc2626; color: white; border: none; border-radius: 6px;
+    padding: 6px 14px; font-size: 11px; font-weight: 600; cursor: pointer;
+  }
+  .pap-btn-eliminar-masivo:hover:not(:disabled) { background: #b91c1c; }
+  .pap-btn-eliminar-masivo:disabled { background: #fca5a5; cursor: not-allowed; }
+  .pap-th-check, .pap-td-check { width: 36px; text-align: center; padding: 6px 4px !important; }
+  .pap-checkbox { width: 15px; height: 15px; cursor: pointer; accent-color: #2563eb; }
+  .pap-fila-sel { background: #eff6ff !important; }
 
   @media (max-width: 768px) {
     .papelera-container {

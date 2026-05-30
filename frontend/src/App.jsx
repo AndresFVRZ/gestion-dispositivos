@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Sidebar from './components/Layout/Sidebar';
 import Login from './pages/Login';
@@ -17,6 +18,15 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <Toaster
+          position="top-right"
+          toastOptions={{
+            duration: 4000,
+            style: { fontSize: '14px', borderRadius: '10px', fontWeight: '500' },
+            success: { style: { background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0' } },
+            error:   { style: { background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' } },
+          }}
+        />
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
