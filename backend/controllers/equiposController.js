@@ -87,8 +87,6 @@ const crearEquipo = async (req, res) => {
             empresa_id
         } = req.body;
 
-        console.log('📦 Creando equipo:', { codigo, nombre_equipo, tipo, empresa_id });
-
         const result = await pool.query(
             `INSERT INTO equipos 
                 (codigo, nombre_equipo, tipo, marca, modelo, serial, estado,
@@ -174,32 +172,25 @@ const eliminarEquipo = async (req, res) => {
         const { id } = req.params;
         const usuarioId = req.usuario.id;
 
-        console.log('🔵 1. ID recibido:', id);
-        console.log('🔵 2. Usuario ID:', usuarioId);
-
         const result = await pool.query(
-            `UPDATE equipos SET 
-                eliminado = TRUE, 
-                eliminado_en = NOW(), 
-                eliminado_por = $1 
+            `UPDATE equipos SET
+                eliminado = TRUE,
+                eliminado_en = NOW(),
+                eliminado_por = $1
              WHERE id = $2 AND eliminado = FALSE
              RETURNING *`,
             [usuarioId, id]
         );
-        
-        console.log('🔵 3. Resultado rows:', result.rows.length);
-        
+
         if (result.rows.length === 0) {
             return res.status(404).json({ success: false, message: 'Equipo no encontrado o ya eliminado' });
         }
 
-        console.log('🔵 4. Intentando registrar historial...');
         await registrarHistorial(pool, req, 'ELIMINAR', result.rows[0], `Equipo movido a papelera`);
-        console.log('🔵 5. Historial registrado');
 
         res.json({ success: true, message: 'Equipo movido a papelera', data: result.rows[0] });
     } catch (error) {
-        console.error('🔴 Error en eliminarEquipo:', error);
+        console.error('Error en eliminarEquipo:', error);
         res.status(500).json({ success: false, message: error.message });
     }
 };

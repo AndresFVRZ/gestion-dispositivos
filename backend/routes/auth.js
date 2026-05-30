@@ -19,6 +19,18 @@ const transporter = nodemailer.createTransport({
   },
 });
 
+// Logo del sistema (público — sin token)
+router.get('/logo-sistema', async (req, res) => {
+  try {
+    const result = await db.query(
+      `SELECT logo FROM empresas WHERE LOWER(nombre) LIKE '%emtra%' AND logo IS NOT NULL LIMIT 1`
+    );
+    res.json({ success: true, logo: result.rows[0]?.logo || null });
+  } catch {
+    res.json({ success: true, logo: null });
+  }
+});
+
 // Login
 router.post('/login', async (req, res) => {
     const { email, password } = req.body;
@@ -75,6 +87,62 @@ router.post('/login', async (req, res) => {
         console.error('Error en login:', error);
         res.status(500).json({ success: false, message: 'Error en el servidor' });
     }
+});
+
+// Activar cuenta con token de invitación
+router.post('/activar', async (req, res) => {
+  const { token, password } = req.body;
+
+  if (!token || !password) {
+    return res.status(400).json({ success: false, message: 'Token y contraseña son requeridos' });
+  }
+  if (password.length < 6) {
+    return res.status(400).json({ success: false, message: 'La contraseña debe tener al menos 6 caracteres' });
+  }
+
+  try {
+    const result = await db.query(
+      `SELECT id, nombre, email FROM usuarios
+       WHERE invitation_token = $1 AND invitation_expires_at > NOW() AND estado = 'pendiente'`,
+      [token]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(400).json({ success: false, message: 'El enlace no es válido o ya expiró.' });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    await db.query(
+      `UPDATE usuarios
+       SET password_hash=$1, estado='activo', invitation_token=NULL, invitation_expires_at=NULL
+       WHERE id=$2`,
+      [hashedPassword, result.rows[0].id]
+    );
+
+    res.json({ success: true, message: 'Cuenta activada correctamente. Ya puedes iniciar sesión.' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Verificar que un token de invitación es válido (para mostrar nombre en la página)
+router.get('/activar/:token', async (req, res) => {
+  try {
+    const result = await db.query(
+      `SELECT nombre, email FROM usuarios
+       WHERE invitation_token = $1 AND invitation_expires_at > NOW() AND estado = 'pendiente'`,
+      [req.params.token]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(400).json({ success: false, message: 'Enlace inválido o expirado.' });
+    }
+
+    res.json({ success: true, data: result.rows[0] });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
 });
 
 // Cambiar contraseña
@@ -152,11 +220,9 @@ router.post('/forgot-password', async (req, res) => {
       `,
     });
 
-    console.log('✅ Email de recuperación enviado a:', user.email);
     res.json({ success: true, message: 'Si el email existe, recibirás un enlace de recuperación' });
 
   } catch (error) {
-    console.error('❌ Error en forgot-password:', error.message);
     res.status(500).json({ success: false, message: 'Error al procesar la solicitud' });
   }
 });
@@ -192,11 +258,9 @@ router.post('/reset-password', async (req, res) => {
     );
 
     resetTokens.delete(token);
-    console.log('✅ Contraseña restablecida para usuario ID:', tokenData.userId);
     res.json({ success: true, message: 'Contraseña restablecida exitosamente. Redirigiendo al inicio...' });
 
   } catch (error) {
-    console.error('❌ Error en reset-password:', error.message);
     res.status(500).json({ success: false, message: 'Error al restablecer la contraseña' });
   }
 });

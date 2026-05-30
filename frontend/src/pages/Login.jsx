@@ -1,6 +1,23 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import logoAccesalud   from '../assets/Accesalud.png';
+import logoEmtra       from '../assets/Emtra.png';
+import logoEmtraSur    from '../assets/EmtraSur.png';
+import logoInprosalud  from '../assets/InprosaludPlus.png';
+import logoSertti      from '../assets/Sertti.png';
+import logoSoluciones  from '../assets/solucionescorp.png';
+import logoSimadrid    from '../assets/simadrid.png';
+
+const TODOS_LOS_LOGOS = [
+  { src: logoAccesalud,  nombre: 'Accesalud' },
+  { src: logoEmtra,      nombre: 'EMTRA' },
+  { src: logoEmtraSur,   nombre: 'EmtraSur' },
+  { src: logoInprosalud, nombre: 'Inprosalud Plus' },
+  { src: logoSertti,     nombre: 'Sertti' },
+  { src: logoSoluciones, nombre: 'Soluciones Corp' },
+  { src: logoSimadrid,   nombre: 'Simadrid' },
+];
 
 function Login() {
   const [email, setEmail] = useState('');
@@ -29,12 +46,36 @@ function Login() {
     }
   };
 
+  // Generar suficientes logos para cubrir toda la pantalla
+  const COLS = 8;
+  const FILAS = 10;
+  const totalCeldas = COLS * FILAS;
+  const logosWallpaper = Array.from({ length: totalCeldas }, (_, i) => {
+    const col = i % COLS;
+    const fila = Math.floor(i / COLS);
+    const esOscuro = (col + fila) % 2 === 0;
+    const logo = TODOS_LOS_LOGOS[i % TODOS_LOS_LOGOS.length];
+    return { ...logo, esOscuro, key: i };
+  });
+
   return (
     <div className="login-page">
+      {/* Fondo de logos en toda la página */}
+      <div className="login-wallpaper">
+        {logosWallpaper.map(({ src, nombre, esOscuro, key }) => (
+          <div
+            key={key}
+            className="login-wallpaper-cell"
+            style={{ background: esOscuro ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.25)' }}
+          >
+            <img src={src} alt={nombre} className="login-wallpaper-img" />
+          </div>
+        ))}
+      </div>
+
       {/* Panel izquierdo - Branding */}
       <div className="login-brand">
         <div className="login-brand-inner">
-          <div className="login-brand-logo">GE</div>
           <h1 className="login-brand-title">Gestión de Equipos</h1>
           <p className="login-brand-sub">Sistema corporativo de inventario tecnológico</p>
           <div className="login-brand-features">
@@ -51,6 +92,7 @@ function Login() {
               Historial de cambios en tiempo real
             </div>
           </div>
+
         </div>
       </div>
 
@@ -131,7 +173,8 @@ loginStyles.textContent = `
   /* ── Panel izquierdo ── */
   .login-brand {
     width: 45%;
-    background: linear-gradient(160deg, #0a1f44 0%, #0f2b5c 40%, #1a3d7c 80%, #1e4d99 100%);
+    position: relative; z-index: 1;
+    background: linear-gradient(160deg, rgba(10,31,68,0.88) 0%, rgba(15,43,92,0.88) 40%, rgba(26,61,124,0.88) 80%, rgba(30,77,153,0.88) 100%);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -156,6 +199,34 @@ loginStyles.textContent = `
     bottom: -80px; left: -80px;
   }
   .login-brand-inner { position: relative; z-index: 1; max-width: 340px; }
+  .login-brand-logo-img {
+    max-width: 160px; max-height: 80px; object-fit: contain;
+    margin-bottom: 24px; filter: brightness(0) invert(1);
+  }
+  /* Wallpaper de logos */
+  .login-wallpaper {
+    position: fixed;
+    inset: 0;
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    pointer-events: none;
+    z-index: 0;
+    overflow: hidden;
+  }
+  .login-wallpaper-cell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px;
+    aspect-ratio: 1.6;
+  }
+  .login-wallpaper-img {
+    width: 80%;
+    max-height: 52px;
+    object-fit: contain;
+    filter: brightness(0) invert(1);
+    opacity: 0.85;
+  }
   .login-brand-logo {
     width: 72px; height: 72px;
     background: linear-gradient(135deg, #3b82f6, #2563eb);
@@ -187,6 +258,7 @@ loginStyles.textContent = `
   /* ── Panel derecho ── */
   .login-form-panel {
     flex: 1;
+    position: relative; z-index: 1;
     display: flex; align-items: center; justify-content: center;
     padding: 48px 32px;
     background: #f8fafc;

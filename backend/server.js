@@ -7,7 +7,8 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
+app.use('/public', require('express').static(require('path').join(__dirname, 'public')));
 
 // Middleware de autenticación para obtener el usuario de la sesión
 app.use(async (req, res, next) => {

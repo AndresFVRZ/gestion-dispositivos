@@ -13,6 +13,7 @@ const Sidebar = () => {
     { path: '/super-admin', nombre: 'Dashboard' },
     { path: '/equipos',     nombre: 'Equipos' },
     { path: '/usuarios',    nombre: 'Usuarios' },
+    { path: '/empresas',    nombre: 'Empresas' },
     { path: '/papelera',    nombre: 'Papelera' },
     { path: '/historial',   nombre: 'Historial' },
   ] : usuario?.rol === 'gestion' ? [

@@ -3,6 +3,7 @@ import { getEquipos } from '../services/equiposService';
 import { getEmpresas } from '../services/empresasService';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { getLogoEmpresa } from '../utils/logos';
 
 function GestionDashboard() {
   const { usuario } = useAuth();
@@ -76,16 +77,33 @@ function GestionDashboard() {
         </div>
         <div className="gd-hero-right">
           {empresas.length > 1 && (
-            <select
-              className="gd-empresa-select"
-              value={empresaActiva}
-              onChange={e => setEmpresaActiva(parseInt(e.target.value))}
-            >
-              {empresas.map(emp => (
-                <option key={emp.id} value={emp.id}>{emp.nombre}</option>
-              ))}
-            </select>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+              {empresas.map(emp => {
+                const logo = getLogoEmpresa(emp.nombre);
+                const activa = empresaActiva === emp.id;
+                return (
+                  <button
+                    key={emp.id}
+                    onClick={() => setEmpresaActiva(emp.id)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '6px',
+                      padding: '6px 12px', borderRadius: '8px', border: 'none', cursor: 'pointer',
+                      background: activa ? 'white' : 'rgba(255,255,255,0.15)',
+                      color: activa ? '#0f2b5c' : 'white', fontWeight: '600', fontSize: '12px',
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    {logo && <img src={logo} alt={emp.nombre} style={{ height: '20px', objectFit: 'contain' }} />}
+                    {emp.nombre}
+                  </button>
+                );
+              })}
+            </div>
           )}
+          {empresas.length === 1 && (() => {
+            const logo = getLogoEmpresa(empresas[0].nombre);
+            return logo ? <img src={logo} alt={empresas[0].nombre} style={{ height: '40px', objectFit: 'contain', filter: 'brightness(0) invert(1)' }} /> : null;
+          })()}
           <button className="gd-btn-primary" onClick={() => navigate('/equipos')}>
             Gestionar Equipos
           </button>

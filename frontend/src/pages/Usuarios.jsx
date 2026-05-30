@@ -4,7 +4,7 @@
 
 import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
-import { getUsuarios, crearUsuario, actualizarUsuario, eliminarUsuario } from '../services/usuariosService';
+import { getUsuarios, crearUsuario, actualizarUsuario, eliminarUsuario, reenviarInvitacion } from '../services/usuariosService';
 import { getEmpresas } from '../services/empresasService';
 import { useAuth } from '../context/AuthContext';
 import ConfirmModal from '../components/Common/ConfirmModal';
@@ -36,41 +36,18 @@ function Usuarios() {
   const cargarDatos = async () => {
     try {
       setCargando(true);
-      console.log('🔄 Cargando usuarios...');
-      
-      const [usuariosRes, empresasRes] = await Promise.all([
-        getUsuarios(),
-        getEmpresas()
-      ]);
-      
-      console.log('📡 Usuarios response:', usuariosRes);
-      console.log('📡 Empresas response:', empresasRes);
-      
-      // Manejar respuesta de usuarios
+      const [usuariosRes, empresasRes] = await Promise.all([getUsuarios(), getEmpresas()]);
+
       let listaUsuarios = [];
-
-      if (Array.isArray(usuariosRes)) {
-        listaUsuarios = usuariosRes;
-      } else if (Array.isArray(usuariosRes?.data)) {
-        listaUsuarios = usuariosRes.data;
-      }
-
-      console.log('✅ Usuarios cargados:', listaUsuarios.length);
+      if (Array.isArray(usuariosRes)) listaUsuarios = usuariosRes;
+      else if (Array.isArray(usuariosRes?.data)) listaUsuarios = usuariosRes.data;
       setUsuarios(listaUsuarios);
-      
-      // Manejar respuesta de empresas
-      if (empresasRes && empresasRes.data) {
-        if (Array.isArray(empresasRes.data)) {
-          setEmpresas(empresasRes.data);
-        } else if (empresasRes.data.data) {
-          setEmpresas(empresasRes.data.data);
-        } else {
-          setEmpresas([]);
-        }
+
+      if (empresasRes?.data) {
+        setEmpresas(Array.isArray(empresasRes.data) ? empresasRes.data : empresasRes.data.data || []);
       }
-      
     } catch (error) {
-      console.error('❌ Error cargando datos:', error);
+      console.error('Error cargando datos:', error);
     } finally {
       setCargando(false);
     }
@@ -102,6 +79,14 @@ function Usuarios() {
     setShowModal(true);
   };
 
+  const handleReenviar = async (id) => {
+    try {
+      const result = await reenviarInvitacion(id);
+      if (result?.success) toast.success('Invitación reenviada correctamente');
+      else toast.error(result?.message || 'Error al reenviar');
+    } catch { toast.error('Error de conexión'); }
+  };
+
   const handleDelete = (id) => {
     const u = usuarios.find(x => x.id === id);
     setConfirm({
@@ -128,10 +113,7 @@ function Usuarios() {
     if (!formData.nombre || !formData.email) {
       toast.error('Nombre y email son obligatorios'); return;
     }
-    if (modalMode === 'create' && !formData.password) {
-      toast.error('La contraseña es obligatoria'); return;
-    }
-    if (formData.password && formData.password.length < 6) {
+    if (modalMode === 'edit' && formData.password && formData.password.length < 6) {
       toast.error('La contraseña debe tener al menos 6 caracteres'); return;
     }
     if (formData.rol !== 'super_admin' && formData.empresas_ids.length === 0) {
@@ -139,17 +121,10 @@ function Usuarios() {
     }
     
     try {
-      let result;
-      if (modalMode === 'create') {
-        console.log('🔄 Creando usuario...');
-        result = await crearUsuario(formData);
-      } else {
-        console.log('🔄 Actualizando usuario...');
-        result = await actualizarUsuario(selectedUsuario.id, formData);
-      }
-      
-      console.log('📥 Resultado del servidor:', result);
-      
+      const result = modalMode === 'create'
+        ? await crearUsuario(formData)
+        : await actualizarUsuario(selectedUsuario.id, formData);
+
       if (result && result.success) {
         setShowModal(false);
         setFormData({ nombre: '', email: '', password: '', rol: 'visualizador', empresas_ids: [] });
@@ -243,13 +218,14 @@ function Usuarios() {
               <th>Email</th>
               <th>Rol</th>
               <th>Empresas</th>
+              <th>Estado</th>
               <th>Acciones</th>
             </tr>
           </thead>
           <tbody>
             {usuariosFiltrados.length === 0 ? (
               <tr>
-                <td colSpan="5" className="usuarios-empty">No hay usuarios registrados</td>
+                <td colSpan="6" className="usuarios-empty">No hay usuarios registrados</td>
               </tr>
             ) : (
               usuariosFiltrados.map(usuario => (
@@ -258,11 +234,19 @@ function Usuarios() {
                   <td className="usuario-email">{usuario.email || '-'}</td>
                   <td><span className={`rol-badge ${getRolColor(usuario.rol)}`}>{getRolTexto(usuario.rol)}</span></td>
                   <td className="usuario-empresas">
-                    {usuario.empresas?.length > 0 
+                    {usuario.empresas?.length > 0
                       ? usuario.empresas.map(e => e.nombre).join(', ')
                       : '-'}
                   </td>
+                  <td>
+                    {usuario.estado === 'pendiente'
+                      ? <span className="estado-badge estado-pendiente">Pendiente</span>
+                      : <span className="estado-badge estado-activo">Activo</span>}
+                  </td>
                   <td className="acciones-cell">
+                    {usuario.estado === 'pendiente' && (
+                      <button className="btn-reenviar" onClick={() => handleReenviar(usuario.id)}>Reenviar</button>
+                    )}
                     <button className="btn-edit" onClick={() => handleEdit(usuario)}>Editar</button>
                     {usuario.id !== usuarioActual?.id && (
                       <button className="btn-delete" onClick={() => handleDelete(usuario.id)}>Eliminar</button>
@@ -296,10 +280,12 @@ function Usuarios() {
                   </div>
                 </div>
                 <div className="form-row">
-                  <div className="form-group">
-                    <label>Contraseña {modalMode === 'create' && '*'}</label>
-                    <input type="password" name="password" value={formData.password} onChange={handleInputChange} required={modalMode === 'create'} placeholder={modalMode === 'edit' ? 'Dejar vacío para no cambiar' : ''} />
-                  </div>
+                  {modalMode === 'edit' && (
+                    <div className="form-group">
+                      <label>Nueva contraseña</label>
+                      <input type="password" name="password" value={formData.password} onChange={handleInputChange} placeholder="Dejar vacío para no cambiar" />
+                    </div>
+                  )}
                   <div className="form-group">
                     <label>Rol *</label>
                     <select name="rol" value={formData.rol} onChange={handleInputChange} required>
@@ -309,6 +295,11 @@ function Usuarios() {
                     </select>
                   </div>
                 </div>
+                {modalMode === 'create' && (
+                  <div className="info-message" style={{ marginBottom: '8px' }}>
+                    Se enviará un correo de invitación al usuario para que cree su propia contraseña.
+                  </div>
+                )}
                 
                 {formData.rol !== 'super_admin' && (
                   <div className="form-group">
@@ -344,7 +335,9 @@ function Usuarios() {
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn-cancel" onClick={() => setShowModal(false)}>Cancelar</button>
-                <button type="submit" className="btn-save">Guardar</button>
+                <button type="submit" className="btn-save">
+                  {modalMode === 'create' ? 'Crear y enviar invitación' : 'Guardar cambios'}
+                </button>
               </div>
             </form>
           </div>
@@ -519,6 +512,17 @@ usuariosStyles.textContent = `
   .acciones-cell {
     white-space: nowrap;
   }
+
+  .estado-badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 500; }
+  .estado-activo { background: #f0fdf4; color: #15803d; }
+  .estado-pendiente { background: #fffbeb; color: #b45309; }
+
+  .btn-reenviar {
+    padding: 5px 10px; border-radius: 6px; border: none; cursor: pointer;
+    font-size: 12px; font-weight: 500; margin-right: 6px;
+    background: #fffbeb; color: #b45309;
+  }
+  .btn-reenviar:hover { background: #fef3c7; }
 
   .btn-edit, .btn-delete {
     padding: 5px 10px;

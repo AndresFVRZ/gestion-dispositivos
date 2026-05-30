@@ -12,6 +12,8 @@ import Usuarios from './pages/Usuarios';
 import Papelera from './pages/Papelera';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
+import ActivarCuenta from './pages/ActivarCuenta';
+import Empresas from './pages/Empresas';
 import './index.css';
 
 function App() {
@@ -31,6 +33,7 @@ function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/activar" element={<ActivarCuenta />} />
           <Route path="/*" element={<AppContent />} />
         </Routes>
       </AuthProvider>
@@ -72,6 +75,7 @@ function AppContent() {
           <Route path="/super-admin" element={<SuperAdminDashboard />} />
           <Route path="/equipos" element={<Equipos />} />
           <Route path="/usuarios" element={<Usuarios />} />
+          <Route path="/empresas" element={<Empresas />} />
           <Route path="/papelera" element={<Papelera />} />
           <Route path="/historial" element={<Historial />} />
         </Routes>

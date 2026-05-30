@@ -3,6 +3,7 @@ import { getEmpresas } from '../services/empresasService';
 import { getEquiposByEmpresa, getEquipos } from '../services/equiposService';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { getLogoEmpresa } from '../utils/logos';
 
 function SuperAdminDashboard() {
   const { usuario } = useAuth();
@@ -154,7 +155,10 @@ function SuperAdminDashboard() {
               >
                 <div className="sa-empresa-left">
                   <div className="sa-empresa-avatar">
-                    {emp.nombre?.charAt(0).toUpperCase()}
+                    {getLogoEmpresa(emp.nombre)
+                      ? <img src={getLogoEmpresa(emp.nombre)} alt={emp.nombre} style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '4px' }} />
+                      : emp.nombre?.charAt(0).toUpperCase()
+                    }
                   </div>
                   <div>
                     <p className="sa-empresa-name">{emp.nombre}</p>

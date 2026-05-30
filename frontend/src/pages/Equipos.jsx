@@ -24,7 +24,6 @@ function Equipos() {
   const [equipoEditando, setEquipoEditando] = useState(null);
   const [cargandoForm, setCargandoForm] = useState(false);
   const [errorForm, setErrorForm] = useState('');
-  const [mensajeImport, setMensajeImport] = useState('');
   
   const [paginaActual, setPaginaActual] = useState(1);
   const [itemsPorPagina, setItemsPorPagina] = useState(10);
@@ -260,8 +259,6 @@ function Equipos() {
 
         if (rows.length === 0) { toast.error('No se encontraron datos o encabezados válidos en el archivo'); return; }
 
-        console.log('📋 Headers detectados:', Object.keys(rows[0]));
-        console.log('📋 Primera fila:', rows[0]);
 
         setImportModal({ estado: 'procesando', progreso: 0, total: rows.length, importados: 0, errores: [] });
 
@@ -444,7 +441,6 @@ function Equipos() {
         </div>
       )}
 
-      {mensajeImport && <div className={mensajeImport.includes('error') ? 'mensaje-error' : 'mensaje-exito'}>{mensajeImport}</div>}
 
       <div className="filter-container">
         <input

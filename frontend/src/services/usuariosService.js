@@ -50,3 +50,12 @@ export const eliminarUsuario = async (id) => {
   }
 };
 
+export const reenviarInvitacion = async (id) => {
+  try {
+    const response = await api.post(`/usuarios/${id}/reenviar-invitacion`);
+    return response;
+  } catch (error) {
+    return { success: false, message: error.message || 'Error al reenviar invitación' };
+  }
+};
+
