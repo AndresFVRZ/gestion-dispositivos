@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { getEmpresas } from '../services/empresasService';
 import { getEquiposByEmpresa, getEquipos } from '../services/equiposService';
 import { useAuth } from '../context/AuthContext';
@@ -12,6 +12,7 @@ function SuperAdminDashboard() {
   const [equiposPorEmpresa, setEquiposPorEmpresa] = useState({});
   const [todosEquipos, setTodosEquipos] = useState([]);
   const [cargando, setCargando] = useState(true);
+  const [empresaAbierta, setEmpresaAbierta] = useState(null);
   const [empresaActiva, setEmpresaActiva] = useState(null); // null = todas
 
   useEffect(() => { cargarDatos(); }, []);
@@ -45,7 +46,7 @@ function SuperAdminDashboard() {
     }
   };
 
-  // Equipos filtrados segÃºn empresa activa
+  // Equipos filtrados según empresa activa
   const equiposFiltrados = empresaActiva
     ? (equiposPorEmpresa[empresaActiva] || [])
     : todosEquipos;
@@ -53,7 +54,7 @@ function SuperAdminDashboard() {
   const total       = equiposFiltrados.length;
   const asignados   = equiposFiltrados.filter(e => e.estado === 'Asignado').length;
   const disponibles = equiposFiltrados.filter(e => e.estado === 'Disponible').length;
-  const manten      = equiposFiltrados.filter(e => ['Mantenimiento', 'DaÃ±ado'].includes(e.estado)).length;
+  const manten      = equiposFiltrados.filter(e => ['Mantenimiento', 'Dañado'].includes(e.estado)).length;
 
   const fecha = new Date().toLocaleDateString('es-CO', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
@@ -63,15 +64,15 @@ function SuperAdminDashboard() {
     const map = {
       'Disponible':    { background: '#f0fdf4', color: '#15803d' },
       'Asignado':      { background: '#eff6ff', color: '#1d4ed8' },
-      'PrÃ©stamo':      { background: '#fefce8', color: '#b45309' },
+      'Préstamo':      { background: '#fefce8', color: '#b45309' },
       'Mantenimiento': { background: '#fff7ed', color: '#c2410c' },
-      'DaÃ±ado':        { background: '#fef2f2', color: '#dc2626' },
+      'Dañado':        { background: '#fef2f2', color: '#dc2626' },
       'Baja':          { background: '#f1f5f9', color: '#475569' },
     };
     return map[estado] || { background: '#f1f5f9', color: '#475569' };
   };
 
-  if (cargando) return <div className="sa-loading">Cargando panel de administraciÃ³n...</div>;
+  if (cargando) return <div className="sa-loading">Cargando panel de administración...</div>;
 
   return (
     <div className="sa-wrap">
@@ -79,7 +80,7 @@ function SuperAdminDashboard() {
       <div className="sa-hero">
         <div className="sa-hero-top">
           <div>
-            <h1 className="sa-hero-title">Panel de AdministraciÃ³n</h1>
+            <h1 className="sa-hero-title">Panel de Administración</h1>
             <p className="sa-hero-sub">Bienvenido, <strong>{usuario?.nombre}</strong> &mdash; {fecha}</p>
           </div>
           <div className="sa-hero-actions">
@@ -192,12 +193,12 @@ function SuperAdminDashboard() {
             <table className="sa-table">
               <thead>
                 <tr>
-                  <th>CÃ³digo</th>
+                  <th>Código</th>
                   <th>Equipo</th>
                   <th>Tipo</th>
                   <th>Estado</th>
                   <th>Asignado a</th>
-                  <th>Ãrea</th>
+                  <th>Área</th>
                   {!empresaActiva && <th>Empresa</th>}
                 </tr>
               </thead>
@@ -220,7 +221,7 @@ function SuperAdminDashboard() {
             </table>
             {total > 50 && (
               <p style={{ textAlign: 'center', padding: '12px', fontSize: '12px', color: '#94a3b8' }}>
-                Mostrando 50 de {total} â€” <button className="sa-link-btn" onClick={() => navigate('/equipos')}>Ver todos â†’</button>
+                Mostrando 50 de {total} — <button className="sa-link-btn" onClick={() => navigate('/equipos')}>Ver todos →</button>
               </p>
             )}
           </div>
@@ -297,10 +298,21 @@ saStyles.textContent = `
   .sa-kpi-value { font-size: 22px; font-weight: 700; color: #0f172a; margin: 0; line-height: 1; }
   .sa-kpi-pct   { font-size: 10px; color: #94a3b8; margin: 1px 0 0 0; }
 
-  /* TABLA EMPRESA */
+  .sa-tabla-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 16px 20px; border-bottom: 1px solid #f1f5f9;
+  }
+  .sa-link-btn { background: none; border: none; color: #3b82f6; font-size: 12px; cursor: pointer; }
+
+  /* SECTION TITLE */
   .sa-section-title { font-size: 16px; font-weight: 600; color: #0f172a; margin: 0; }
   .sa-section-sub { font-size: 13px; color: #94a3b8; }
-  .sa-empresa-card { background: white; border-radius: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); overflow: hidden; }
+
+  /* EMPRESA CARD */
+  .sa-empresa-card {
+    background: white; border-radius: 16px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08); overflow: hidden;
+  }
 
   /* TABLE */
   .sa-table-wrap { overflow-x: auto; }
@@ -334,4 +346,3 @@ saStyles.textContent = `
   }
 `;
 document.head.appendChild(saStyles);
-
