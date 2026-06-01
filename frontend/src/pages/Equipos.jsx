@@ -9,6 +9,7 @@ import { useAuth } from '../context/AuthContext';
 import ConfirmModal from '../components/Common/ConfirmModal';
 import ImportModal from '../components/Common/ImportModal';
 import { calcularGarantia, textoGarantia, colorGarantia } from '../utils/garantia';
+import { getLogoEmpresa } from '../utils/logos';
 import * as XLSX from 'xlsx';
 
 // ==========================================
@@ -32,6 +33,7 @@ function Equipos() {
   const [mostrarModalDetalle, setMostrarModalDetalle] = useState(false);
   const [equipoDetalle, setEquipoDetalle] = useState(null);
   const [cargandoOperacion, setCargandoOperacion] = useState(false);
+  const [empresaFiltro, setEmpresaFiltro] = useState(null); // null = todas
   const [mensajeOperacion, setMensajeOperacion] = useState('');
   const [modoSeleccion, setModoSeleccion] = useState(false);
   const [seleccionados, setSeleccionados] = useState([]);
@@ -288,7 +290,7 @@ function Equipos() {
             const marca             = g('marca');
             const modelo            = g('modelo');
             const serial            = g('serial');
-            const ubicacion         = g('ubicacion');        // cubre "ubicación" sin acento
+            const ubicacion         = g('area') || g('ubicacion');
             const asignado_a        = g('asignado_a');
             const procesador        = g('procesador');
             const ram               = g('ram');              // cubre "Ram", "RAM"
@@ -348,7 +350,7 @@ function Equipos() {
         'Código': equipo.codigo || '', 'Equipo': equipo.nombre_equipo || '',
         'Tipo': equipo.tipo || '', 'Marca': equipo.marca || '',
         'Modelo': equipo.modelo || '', 'Serial': equipo.serial || '',
-        'Estado': equipo.estado || '', 'Ubicación': equipo.ubicacion || '',
+        'Estado': equipo.estado || '', 'Área': equipo.ubicacion || '',
         'Asignado a': equipo.asignado_a || '', 'Procesador': equipo.procesador || '',
         'RAM': equipo.ram || '', 'Disco Duro': equipo.disco_duro || '',
         'Sistema Operativo': equipo.sistema_operativo || '', 'Garantía': equipo.garantia || '',
@@ -365,6 +367,7 @@ function Equipos() {
   };
 
   const equiposFiltrados = equipos.filter(equipo => {
+    if (empresaFiltro && equipo.empresa_id !== empresaFiltro) return false;
     if (filtroEstado && equipo.estado !== filtroEstado) return false;
     if (!filtroBusqueda) return true;
     const busqueda = filtroBusqueda.toLowerCase();
@@ -443,6 +446,45 @@ function Equipos() {
       )}
 
 
+      {/* Selector de empresa — visible solo si hay más de una */}
+      {empresas.length > 1 && (
+        <div className="eq-selector-scroll">
+          <button
+            className={`eq-sel-card ${empresaFiltro === null ? 'eq-sel-card-active' : ''}`}
+            onClick={() => { setEmpresaFiltro(null); setPaginaActual(1); }}
+          >
+            <div className="eq-sel-avatar eq-sel-avatar-all">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="20" height="20">
+                <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
+              </svg>
+            </div>
+            <p className="eq-sel-name">Todas</p>
+            <p className="eq-sel-count">{equipos.length}</p>
+          </button>
+          {empresas.map(emp => {
+            const logo = getLogoEmpresa(emp.nombre);
+            const activa = empresaFiltro === emp.id;
+            const cnt = equipos.filter(e => e.empresa_id === emp.id).length;
+            return (
+              <button
+                key={emp.id}
+                className={`eq-sel-card ${activa ? 'eq-sel-card-active' : ''}`}
+                onClick={() => { setEmpresaFiltro(emp.id); setPaginaActual(1); }}
+              >
+                <div className="eq-sel-avatar">
+                  {logo
+                    ? <img src={logo} alt={emp.nombre} style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '5px' }} />
+                    : <span style={{ fontWeight: '700', color: 'white', fontSize: '18px' }}>{emp.nombre.charAt(0)}</span>
+                  }
+                </div>
+                <p className="eq-sel-name">{emp.nombre}</p>
+                <p className="eq-sel-count">{cnt}</p>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       <div className="filter-container">
         <input
           className="filter-input"
@@ -489,7 +531,7 @@ function Equipos() {
                 <th>Estado</th>
                 <th>Garantía</th>
                 <th>Asignado a</th>
-                <th>Ubicación</th>
+                <th>Área</th>
                 <th>Acciones</th>
               </tr>
             </thead>
@@ -613,7 +655,7 @@ function Equipos() {
                   <div className="form-group"><label>Marca</label><input type="text" value={formData.marca} onChange={e => setFormData({...formData, marca: e.target.value})} /></div>
                   <div className="form-group"><label>Modelo</label><input type="text" value={formData.modelo} onChange={e => setFormData({...formData, modelo: e.target.value})} /></div>
                   <div className="form-group"><label>Serial</label><input type="text" value={formData.serial} onChange={e => setFormData({...formData, serial: e.target.value})} /></div>
-                  <div className="form-group"><label>Ubicación</label><input type="text" value={formData.ubicacion} onChange={e => setFormData({...formData, ubicacion: e.target.value})} /></div>
+                  <div className="form-group"><label>Área</label><input type="text" value={formData.ubicacion} onChange={e => setFormData({...formData, ubicacion: e.target.value})} /></div>
                   <div className="form-group"><label>Asignado a</label><input type="text" value={formData.asignado_a} onChange={e => setFormData({...formData, asignado_a: e.target.value})} /></div>
                   <div className="form-group"><label>Procesador</label><input type="text" value={formData.procesador} onChange={e => setFormData({...formData, procesador: e.target.value})} /></div>
                   <div className="form-group"><label>RAM</label><input type="text" value={formData.ram} onChange={e => setFormData({...formData, ram: e.target.value})} /></div>
@@ -683,7 +725,7 @@ function Equipos() {
               <div><strong>Marca:</strong> {equipoDetalle.marca || '-'}</div>
               <div><strong>Modelo:</strong> {equipoDetalle.modelo || '-'}</div>
               <div><strong>Serial:</strong> {equipoDetalle.serial || '-'}</div>
-              <div><strong>Ubicación:</strong> {equipoDetalle.ubicacion || '-'}</div>
+              <div><strong>Área:</strong> {equipoDetalle.ubicacion || '-'}</div>
               <div><strong>Asignado a:</strong> {equipoDetalle.asignado_a || '-'}</div>
               <div><strong>Procesador:</strong> {equipoDetalle.procesador || '-'}</div>
               <div><strong>RAM:</strong> {equipoDetalle.ram || '-'}</div>
@@ -770,6 +812,29 @@ equiposStyles.textContent = `
   .btn-primary { background: #1a3a5c; color: white; padding: 5px 12px; border-radius: 5px; border: none; cursor: pointer; font-size: 11px; }
   .btn-secondary { background: #eef2f5; color: #2c4a6e; padding: 5px 12px; border-radius: 5px; border: 1px solid #dce4ec; cursor: pointer; font-size: 11px; }
   
+  /* Selector empresa */
+  .eq-selector-scroll {
+    display: flex; gap: 10px; overflow-x: auto; padding-bottom: 8px;
+    margin-bottom: 12px; scrollbar-width: thin; scrollbar-color: #e2e8f0 transparent;
+  }
+  .eq-sel-card {
+    flex-shrink: 0; width: 100px; background: white; border-radius: 12px;
+    padding: 10px 8px; border: 2px solid transparent; cursor: pointer;
+    text-align: center; transition: all 0.18s;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+  }
+  .eq-sel-card:hover { border-color: #bfdbfe; transform: translateY(-2px); }
+  .eq-sel-card-active { border-color: #2563eb !important; background: #eff6ff !important; }
+  .eq-sel-avatar {
+    width: 48px; height: 48px; border-radius: 10px;
+    background: linear-gradient(135deg, #0f2b5c, #2563eb);
+    display: flex; align-items: center; justify-content: center; overflow: hidden;
+  }
+  .eq-sel-avatar-all { background: linear-gradient(135deg, #1e40af, #3b82f6); }
+  .eq-sel-name { font-size: 10px; font-weight: 600; color: #0f172a; margin: 0; line-height: 1.3; }
+  .eq-sel-count { font-size: 10px; color: #94a3b8; margin: 0; }
+
   .filter-container { background: white; border-radius: 6px; padding: 8px 12px; margin-bottom: 12px; border: 1px solid #e2e8f0; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .filter-input { padding: 5px 8px; border: 1px solid #d1dce6; border-radius: 5px; font-size: 11px; min-width: 180px; flex: 1; max-width: 260px; outline: none; }
   .filter-input:focus { border-color: #1a3a5c; }

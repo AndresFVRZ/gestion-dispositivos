@@ -76,30 +76,6 @@ function GestionDashboard() {
           <p className="gd-hero-sub">Bienvenido, <strong>{usuario?.nombre}</strong> &mdash; {fecha}</p>
         </div>
         <div className="gd-hero-right">
-          {empresas.length > 1 && (
-            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
-              {empresas.map(emp => {
-                const logo = getLogoEmpresa(emp.nombre);
-                const activa = empresaActiva === emp.id;
-                return (
-                  <button
-                    key={emp.id}
-                    onClick={() => setEmpresaActiva(emp.id)}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: '6px',
-                      padding: '6px 12px', borderRadius: '8px', border: 'none', cursor: 'pointer',
-                      background: activa ? 'white' : 'rgba(255,255,255,0.15)',
-                      color: activa ? '#0f2b5c' : 'white', fontWeight: '600', fontSize: '12px',
-                      transition: 'all 0.15s',
-                    }}
-                  >
-                    {logo && <img src={logo} alt={emp.nombre} style={{ height: '20px', objectFit: 'contain' }} />}
-                    {emp.nombre}
-                  </button>
-                );
-              })}
-            </div>
-          )}
           {empresas.length === 1 && (() => {
             const logo = getLogoEmpresa(empresas[0].nombre);
             return logo ? <img src={logo} alt={empresas[0].nombre} style={{ height: '40px', objectFit: 'contain', filter: 'brightness(0) invert(1)' }} /> : null;
@@ -109,6 +85,33 @@ function GestionDashboard() {
           </button>
         </div>
       </div>
+
+      {/* SELECTOR DE EMPRESA (solo si tiene más de una) */}
+      {empresas.length > 1 && (
+        <div className="gd-selector-scroll">
+          {empresas.map(emp => {
+            const logo = getLogoEmpresa(emp.nombre);
+            const activa = empresaActiva === emp.id;
+            const equiposEmp = equipos.filter(e => e.empresa_id === emp.id).length;
+            return (
+              <button
+                key={emp.id}
+                className={`gd-sel-card ${activa ? 'gd-sel-card-active' : ''}`}
+                onClick={() => setEmpresaActiva(emp.id)}
+              >
+                <div className="gd-sel-avatar">
+                  {logo
+                    ? <img src={logo} alt={emp.nombre} style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '6px' }} />
+                    : <span style={{ fontSize: '20px', fontWeight: '700', color: 'white' }}>{emp.nombre.charAt(0)}</span>
+                  }
+                </div>
+                <p className="gd-sel-name">{emp.nombre}</p>
+                <p className="gd-sel-count">{equiposEmp} equipos</p>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* KPI CARDS */}
       <div className="gd-kpi-grid">
@@ -224,7 +227,7 @@ function GestionDashboard() {
                 <th>Tipo</th>
                 <th>Estado</th>
                 <th>Asignado a</th>
-                <th>Ubicación</th>
+                <th>Área</th>
               </tr>
             </thead>
             <tbody>
@@ -282,6 +285,28 @@ gdStyles.textContent = `
     box-shadow: 0 2px 8px rgba(0,0,0,0.15); transition: transform 0.15s;
   }
   .gd-btn-primary:hover { transform: translateY(-1px); }
+
+  /* SELECTOR EMPRESA */
+  .gd-selector-scroll {
+    display: flex; gap: 12px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 24px;
+    scrollbar-width: thin; scrollbar-color: #e2e8f0 transparent;
+  }
+  .gd-sel-card {
+    flex-shrink: 0; width: 130px; background: white; border-radius: 16px;
+    padding: 16px 12px; border: 2px solid transparent; cursor: pointer;
+    text-align: center; transition: all 0.2s;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+  }
+  .gd-sel-card:hover { border-color: #bfdbfe; transform: translateY(-2px); }
+  .gd-sel-card-active { border-color: #2563eb !important; background: #eff6ff !important; }
+  .gd-sel-avatar {
+    width: 60px; height: 60px; border-radius: 14px;
+    background: linear-gradient(135deg, #0f2b5c, #2563eb);
+    display: flex; align-items: center; justify-content: center; overflow: hidden;
+  }
+  .gd-sel-name { font-size: 12px; font-weight: 600; color: #0f172a; margin: 0; line-height: 1.3; }
+  .gd-sel-count { font-size: 11px; color: #94a3b8; margin: 0; }
 
   /* KPI GRID */
   .gd-kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 28px; }

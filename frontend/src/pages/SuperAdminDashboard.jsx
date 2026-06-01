@@ -13,6 +13,7 @@ function SuperAdminDashboard() {
   const [todosEquipos, setTodosEquipos] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [empresaAbierta, setEmpresaAbierta] = useState(null);
+  const [empresaActiva, setEmpresaActiva] = useState(null); // null = todas
 
   useEffect(() => { cargarDatos(); }, []);
 
@@ -45,10 +46,15 @@ function SuperAdminDashboard() {
     }
   };
 
-  const total     = todosEquipos.length;
-  const asignados = todosEquipos.filter(e => e.estado === 'Asignado').length;
-  const disponibles = todosEquipos.filter(e => e.estado === 'Disponible').length;
-  const manten   = todosEquipos.filter(e => ['Mantenimiento', 'Dañado'].includes(e.estado)).length;
+  // Equipos filtrados según empresa activa
+  const equiposFiltrados = empresaActiva
+    ? (equiposPorEmpresa[empresaActiva] || [])
+    : todosEquipos;
+
+  const total       = equiposFiltrados.length;
+  const asignados   = equiposFiltrados.filter(e => e.estado === 'Asignado').length;
+  const disponibles = equiposFiltrados.filter(e => e.estado === 'Disponible').length;
+  const manten      = equiposFiltrados.filter(e => ['Mantenimiento', 'Dañado'].includes(e.estado)).length;
 
   const fecha = new Date().toLocaleDateString('es-CO', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
@@ -70,15 +76,41 @@ function SuperAdminDashboard() {
 
   return (
     <div className="sa-wrap">
-      {/* HERO */}
+      {/* HERO + SELECTOR INTEGRADO */}
       <div className="sa-hero">
-        <div>
-          <h1 className="sa-hero-title">Panel de Super Administrador</h1>
-          <p className="sa-hero-sub">Bienvenido, <strong>{usuario?.nombre}</strong> &mdash; {fecha}</p>
+        <div className="sa-hero-top">
+          <div>
+            <h1 className="sa-hero-title">Panel de Administración</h1>
+            <p className="sa-hero-sub">Bienvenido, <strong>{usuario?.nombre}</strong> &mdash; {fecha}</p>
+          </div>
+          <div className="sa-hero-actions">
+            <button className="sa-btn-outline" onClick={() => navigate('/usuarios')}>Usuarios</button>
+            <button className="sa-btn-white" onClick={() => navigate('/equipos')}>Inventario</button>
+          </div>
         </div>
-        <div className="sa-hero-actions">
-          <button className="sa-btn-outline" onClick={() => navigate('/usuarios')}>Gestionar Usuarios</button>
-          <button className="sa-btn-white" onClick={() => navigate('/equipos')}>Ver Inventario</button>
+
+        {/* Selector empresa dentro del hero */}
+        <div className="sa-hero-selector">
+          <button
+            className={`sa-hero-sel ${empresaActiva === null ? 'sa-hero-sel-active' : ''}`}
+            onClick={() => setEmpresaActiva(null)}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="16" height="16"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+            Todas
+          </button>
+          {empresas.map(emp => {
+            const logo = getLogoEmpresa(emp.nombre);
+            return (
+              <button
+                key={emp.id}
+                className={`sa-hero-sel ${empresaActiva === emp.id ? 'sa-hero-sel-active' : ''}`}
+                onClick={() => setEmpresaActiva(emp.id)}
+              >
+                {logo && <img src={logo} alt="" style={{ height: '16px', objectFit: 'contain', filter: 'brightness(0) invert(1)' }} />}
+                {emp.nombre}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -134,86 +166,66 @@ function SuperAdminDashboard() {
         </div>
       </div>
 
-      {/* EMPRESAS */}
-      <div className="sa-section-title-row">
-        <h2 className="sa-section-title">Equipos por Empresa</h2>
-        <span className="sa-section-sub">{empresas.length} empresa{empresas.length !== 1 ? 's' : ''} registrada{empresas.length !== 1 ? 's' : ''}</span>
-      </div>
 
-      <div className="sa-empresas">
-        {empresas.map(emp => {
-          const lista = equiposPorEmpresa[emp.id] || [];
-          const abierto = empresaAbierta === emp.id;
-          const asig = lista.filter(e => e.estado === 'Asignado').length;
-          const disp = lista.filter(e => e.estado === 'Disponible').length;
+      {/* TABLA DE DISPOSITIVOS */}
+      <div className="sa-empresa-card">
+        <div className="sa-tabla-header">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            {empresaActiva && getLogoEmpresa(empresas.find(e => e.id === empresaActiva)?.nombre) && (
+              <img
+                src={getLogoEmpresa(empresas.find(e => e.id === empresaActiva)?.nombre)}
+                alt="" style={{ height: '32px', objectFit: 'contain' }}
+              />
+            )}
+            <h2 className="sa-section-title" style={{ margin: 0 }}>
+              {empresaActiva
+                ? empresas.find(e => e.id === empresaActiva)?.nombre
+                : 'Todos los equipos'}
+            </h2>
+          </div>
+          <span className="sa-section-sub">{total} equipo{total !== 1 ? 's' : ''}</span>
+        </div>
 
-          return (
-            <div key={emp.id} className="sa-empresa-card">
-              <button
-                className="sa-empresa-header"
-                onClick={() => setEmpresaAbierta(abierto ? null : emp.id)}
-              >
-                <div className="sa-empresa-left">
-                  <div className="sa-empresa-avatar">
-                    {getLogoEmpresa(emp.nombre)
-                      ? <img src={getLogoEmpresa(emp.nombre)} alt={emp.nombre} style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '4px' }} />
-                      : emp.nombre?.charAt(0).toUpperCase()
-                    }
-                  </div>
-                  <div>
-                    <p className="sa-empresa-name">{emp.nombre}</p>
-                    <div className="sa-empresa-pills">
-                      <span className="sa-pill sa-pill-total">{lista.length} equipos</span>
-                      <span className="sa-pill sa-pill-green">{disp} disponibles</span>
-                      <span className="sa-pill sa-pill-blue">{asig} asignados</span>
-                    </div>
-                  </div>
-                </div>
-                <span className={`sa-chevron ${abierto ? 'sa-chevron-open' : ''}`}>›</span>
-              </button>
-
-              {abierto && (
-                <div className="sa-empresa-body">
-                  {lista.length === 0 ? (
-                    <p className="sa-empty">No hay equipos registrados en esta empresa</p>
-                  ) : (
-                    <div className="sa-table-wrap">
-                      <table className="sa-table">
-                        <thead>
-                          <tr>
-                            <th>Código</th>
-                            <th>Equipo</th>
-                            <th>Tipo</th>
-                            <th>Estado</th>
-                            <th>Asignado a</th>
-                            <th>Ubicación</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {lista.map(eq => {
-                            const s = estadoStyle(eq.estado);
-                            return (
-                              <tr key={eq.id}>
-                                <td className="sa-code">{eq.codigo || '-'}</td>
-                                <td className="sa-name">{eq.nombre_equipo || '-'}</td>
-                                <td className="sa-muted">{eq.tipo || '-'}</td>
-                                <td>
-                                  <span className="sa-badge" style={s}>{eq.estado || '-'}</span>
-                                </td>
-                                <td>{eq.asignado_a || '-'}</td>
-                                <td className="sa-muted">{eq.ubicacion || '-'}</td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })}
+        {total === 0 ? (
+          <p className="sa-empty">No hay equipos registrados</p>
+        ) : (
+          <div className="sa-table-wrap">
+            <table className="sa-table">
+              <thead>
+                <tr>
+                  <th>Código</th>
+                  <th>Equipo</th>
+                  <th>Tipo</th>
+                  <th>Estado</th>
+                  <th>Asignado a</th>
+                  <th>Área</th>
+                  {!empresaActiva && <th>Empresa</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {equiposFiltrados.slice(0, 50).map(eq => {
+                  const s = estadoStyle(eq.estado);
+                  return (
+                    <tr key={eq.id}>
+                      <td className="sa-code">{eq.codigo || '-'}</td>
+                      <td className="sa-name">{eq.nombre_equipo || '-'}</td>
+                      <td className="sa-muted">{eq.tipo || '-'}</td>
+                      <td><span className="sa-badge" style={s}>{eq.estado || '-'}</span></td>
+                      <td>{eq.asignado_a || '-'}</td>
+                      <td className="sa-muted">{eq.ubicacion || '-'}</td>
+                      {!empresaActiva && <td className="sa-muted">{eq.empresa_nombre || '-'}</td>}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            {total > 50 && (
+              <p style={{ textAlign: 'center', padding: '12px', fontSize: '12px', color: '#94a3b8' }}>
+                Mostrando 50 de {total} — <button className="sa-link-btn" onClick={() => navigate('/equipos')}>Ver todos →</button>
+              </p>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -227,14 +239,26 @@ saStyles.textContent = `
 
   /* HERO */
   .sa-hero {
-    display: flex; justify-content: space-between; align-items: center;
     background: linear-gradient(135deg, #0a1f44 0%, #0f2b5c 40%, #1a3d7c 80%, #2563eb 100%);
-    border-radius: 20px; padding: 32px 36px; margin-bottom: 28px;
-    box-shadow: 0 8px 32px rgba(10,31,68,0.3); flex-wrap: wrap; gap: 16px;
+    border-radius: 20px; padding: 24px 28px; margin-bottom: 20px;
+    box-shadow: 0 8px 32px rgba(10,31,68,0.3);
   }
-  .sa-hero-title { font-size: 28px; font-weight: 700; color: white; margin: 0 0 6px 0; }
-  .sa-hero-sub { color: rgba(255,255,255,0.7); font-size: 14px; margin: 0; }
-  .sa-hero-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+  .sa-hero-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px; }
+  .sa-hero-title { font-size: 22px; font-weight: 700; color: white; margin: 0 0 4px 0; }
+  .sa-hero-sub { color: rgba(255,255,255,0.7); font-size: 13px; margin: 0; }
+  .sa-hero-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+  .sa-hero-selector {
+    display: flex; gap: 8px; overflow-x: auto; flex-wrap: wrap;
+    scrollbar-width: none;
+  }
+  .sa-hero-sel {
+    display: flex; align-items: center; gap: 6px;
+    padding: 6px 14px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.25);
+    background: rgba(255,255,255,0.1); color: white; font-size: 12px; font-weight: 500;
+    cursor: pointer; transition: all 0.15s; white-space: nowrap;
+  }
+  .sa-hero-sel:hover { background: rgba(255,255,255,0.2); }
+  .sa-hero-sel-active { background: white !important; color: #0f2b5c !important; border-color: white !important; font-weight: 600; }
   .sa-btn-white {
     padding: 10px 20px; background: white; color: #0f2b5c;
     border: none; border-radius: 10px; font-weight: 600; font-size: 14px;
@@ -249,32 +273,59 @@ saStyles.textContent = `
   .sa-btn-outline:hover { background: rgba(255,255,255,0.2); }
 
   /* KPI */
-  .sa-kpi-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin-bottom: 28px; }
+  .sa-kpi-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 20px; }
   .sa-kpi {
-    background: white; border-radius: 16px; padding: 20px 16px;
-    display: flex; align-items: center; gap: 14px;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.08); border-left: 4px solid transparent;
-    transition: transform 0.15s, box-shadow 0.15s;
+    background: white; border-radius: 12px; padding: 14px 12px;
+    display: flex; align-items: center; gap: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.07); border-left: 3px solid transparent;
   }
-  .sa-kpi:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.1); }
   .sa-kpi-blue   { border-color: #3b82f6; }
   .sa-kpi-indigo { border-color: #6366f1; }
   .sa-kpi-green  { border-color: #10b981; }
   .sa-kpi-teal   { border-color: #06b6d4; }
   .sa-kpi-orange { border-color: #f59e0b; }
   .sa-kpi-icon {
-    width: 44px; height: 44px; border-radius: 12px; display: flex;
+    width: 36px; height: 36px; border-radius: 9px; display: flex;
     align-items: center; justify-content: center; flex-shrink: 0;
   }
-  .sa-kpi-icon svg { width: 20px; height: 20px; }
+  .sa-kpi-icon svg { width: 16px; height: 16px; }
   .sa-kpi-blue   .sa-kpi-icon { background: #eff6ff; color: #3b82f6; }
   .sa-kpi-indigo .sa-kpi-icon { background: #eef2ff; color: #6366f1; }
   .sa-kpi-green  .sa-kpi-icon { background: #f0fdf4; color: #10b981; }
   .sa-kpi-teal   .sa-kpi-icon { background: #ecfeff; color: #06b6d4; }
   .sa-kpi-orange .sa-kpi-icon { background: #fff7ed; color: #f59e0b; }
-  .sa-kpi-label { font-size: 11px; font-weight: 500; color: #64748b; margin: 0 0 4px 0; text-transform: uppercase; letter-spacing: 0.4px; }
-  .sa-kpi-value { font-size: 28px; font-weight: 700; color: #0f172a; margin: 0; line-height: 1; }
-  .sa-kpi-pct   { font-size: 11px; color: #94a3b8; margin: 2px 0 0 0; }
+  .sa-kpi-label { font-size: 10px; font-weight: 500; color: #64748b; margin: 0 0 2px 0; text-transform: uppercase; letter-spacing: 0.4px; }
+  .sa-kpi-value { font-size: 22px; font-weight: 700; color: #0f172a; margin: 0; line-height: 1; }
+  .sa-kpi-pct   { font-size: 10px; color: #94a3b8; margin: 1px 0 0 0; }
+
+  /* SELECTOR DE EMPRESA */
+  .sa-selector-wrap { margin-bottom: 24px; }
+  .sa-selector-scroll {
+    display: flex; gap: 12px; overflow-x: auto; padding-bottom: 8px;
+    scrollbar-width: thin; scrollbar-color: #e2e8f0 transparent;
+  }
+  .sa-sel-card {
+    flex-shrink: 0; width: 130px; background: white; border-radius: 16px;
+    padding: 16px 12px; border: 2px solid transparent; cursor: pointer;
+    text-align: center; transition: all 0.2s;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+  }
+  .sa-sel-card:hover { border-color: #bfdbfe; transform: translateY(-2px); }
+  .sa-sel-card-active { border-color: #2563eb !important; background: #eff6ff !important; }
+  .sa-sel-avatar {
+    width: 60px; height: 60px; border-radius: 14px;
+    background: linear-gradient(135deg, #0f2b5c, #2563eb);
+    display: flex; align-items: center; justify-content: center; overflow: hidden;
+  }
+  .sa-sel-avatar-all { background: linear-gradient(135deg, #1e40af, #3b82f6); }
+  .sa-sel-name { font-size: 12px; font-weight: 600; color: #0f172a; margin: 0; line-height: 1.3; }
+  .sa-sel-count { font-size: 11px; color: #94a3b8; margin: 0; }
+  .sa-tabla-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 16px 20px; border-bottom: 1px solid #f1f5f9;
+  }
+  .sa-link-btn { background: none; border: none; color: #3b82f6; font-size: 12px; cursor: pointer; }
 
   /* SECTION TITLE */
   .sa-section-title-row { display: flex; align-items: baseline; gap: 12px; margin-bottom: 16px; }

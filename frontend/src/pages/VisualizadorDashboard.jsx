@@ -164,7 +164,7 @@ function VisualizadorDashboard() {
                 <th>Marca / Modelo</th>
                 <th>Estado</th>
                 <th>Asignado a</th>
-                <th>Ubicación</th>
+                <th>Área</th>
               </tr>
             </thead>
             <tbody>
