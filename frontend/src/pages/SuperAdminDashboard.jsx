@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { getEmpresas } from '../services/empresasService';
 import { getEquiposByEmpresa, getEquipos } from '../services/equiposService';
 import { useAuth } from '../context/AuthContext';
@@ -12,7 +12,6 @@ function SuperAdminDashboard() {
   const [equiposPorEmpresa, setEquiposPorEmpresa] = useState({});
   const [todosEquipos, setTodosEquipos] = useState([]);
   const [cargando, setCargando] = useState(true);
-  const [empresaAbierta, setEmpresaAbierta] = useState(null);
   const [empresaActiva, setEmpresaActiva] = useState(null); // null = todas
 
   useEffect(() => { cargarDatos(); }, []);
@@ -46,7 +45,7 @@ function SuperAdminDashboard() {
     }
   };
 
-  // Equipos filtrados según empresa activa
+  // Equipos filtrados segÃºn empresa activa
   const equiposFiltrados = empresaActiva
     ? (equiposPorEmpresa[empresaActiva] || [])
     : todosEquipos;
@@ -54,7 +53,7 @@ function SuperAdminDashboard() {
   const total       = equiposFiltrados.length;
   const asignados   = equiposFiltrados.filter(e => e.estado === 'Asignado').length;
   const disponibles = equiposFiltrados.filter(e => e.estado === 'Disponible').length;
-  const manten      = equiposFiltrados.filter(e => ['Mantenimiento', 'Dañado'].includes(e.estado)).length;
+  const manten      = equiposFiltrados.filter(e => ['Mantenimiento', 'DaÃ±ado'].includes(e.estado)).length;
 
   const fecha = new Date().toLocaleDateString('es-CO', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
@@ -64,15 +63,15 @@ function SuperAdminDashboard() {
     const map = {
       'Disponible':    { background: '#f0fdf4', color: '#15803d' },
       'Asignado':      { background: '#eff6ff', color: '#1d4ed8' },
-      'Préstamo':      { background: '#fefce8', color: '#b45309' },
+      'PrÃ©stamo':      { background: '#fefce8', color: '#b45309' },
       'Mantenimiento': { background: '#fff7ed', color: '#c2410c' },
-      'Dañado':        { background: '#fef2f2', color: '#dc2626' },
+      'DaÃ±ado':        { background: '#fef2f2', color: '#dc2626' },
       'Baja':          { background: '#f1f5f9', color: '#475569' },
     };
     return map[estado] || { background: '#f1f5f9', color: '#475569' };
   };
 
-  if (cargando) return <div className="sa-loading">Cargando panel de administración...</div>;
+  if (cargando) return <div className="sa-loading">Cargando panel de administraciÃ³n...</div>;
 
   return (
     <div className="sa-wrap">
@@ -80,7 +79,7 @@ function SuperAdminDashboard() {
       <div className="sa-hero">
         <div className="sa-hero-top">
           <div>
-            <h1 className="sa-hero-title">Panel de Administración</h1>
+            <h1 className="sa-hero-title">Panel de AdministraciÃ³n</h1>
             <p className="sa-hero-sub">Bienvenido, <strong>{usuario?.nombre}</strong> &mdash; {fecha}</p>
           </div>
           <div className="sa-hero-actions">
@@ -193,12 +192,12 @@ function SuperAdminDashboard() {
             <table className="sa-table">
               <thead>
                 <tr>
-                  <th>Código</th>
+                  <th>CÃ³digo</th>
                   <th>Equipo</th>
                   <th>Tipo</th>
                   <th>Estado</th>
                   <th>Asignado a</th>
-                  <th>Área</th>
+                  <th>Ãrea</th>
                   {!empresaActiva && <th>Empresa</th>}
                 </tr>
               </thead>
@@ -221,7 +220,7 @@ function SuperAdminDashboard() {
             </table>
             {total > 50 && (
               <p style={{ textAlign: 'center', padding: '12px', fontSize: '12px', color: '#94a3b8' }}>
-                Mostrando 50 de {total} — <button className="sa-link-btn" onClick={() => navigate('/equipos')}>Ver todos →</button>
+                Mostrando 50 de {total} â€” <button className="sa-link-btn" onClick={() => navigate('/equipos')}>Ver todos â†’</button>
               </p>
             )}
           </div>
@@ -298,76 +297,10 @@ saStyles.textContent = `
   .sa-kpi-value { font-size: 22px; font-weight: 700; color: #0f172a; margin: 0; line-height: 1; }
   .sa-kpi-pct   { font-size: 10px; color: #94a3b8; margin: 1px 0 0 0; }
 
-  /* SELECTOR DE EMPRESA */
-  .sa-selector-wrap { margin-bottom: 24px; }
-  .sa-selector-scroll {
-    display: flex; gap: 12px; overflow-x: auto; padding-bottom: 8px;
-    scrollbar-width: thin; scrollbar-color: #e2e8f0 transparent;
-  }
-  .sa-sel-card {
-    flex-shrink: 0; width: 130px; background: white; border-radius: 16px;
-    padding: 16px 12px; border: 2px solid transparent; cursor: pointer;
-    text-align: center; transition: all 0.2s;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
-    display: flex; flex-direction: column; align-items: center; gap: 8px;
-  }
-  .sa-sel-card:hover { border-color: #bfdbfe; transform: translateY(-2px); }
-  .sa-sel-card-active { border-color: #2563eb !important; background: #eff6ff !important; }
-  .sa-sel-avatar {
-    width: 60px; height: 60px; border-radius: 14px;
-    background: linear-gradient(135deg, #0f2b5c, #2563eb);
-    display: flex; align-items: center; justify-content: center; overflow: hidden;
-  }
-  .sa-sel-avatar-all { background: linear-gradient(135deg, #1e40af, #3b82f6); }
-  .sa-sel-name { font-size: 12px; font-weight: 600; color: #0f172a; margin: 0; line-height: 1.3; }
-  .sa-sel-count { font-size: 11px; color: #94a3b8; margin: 0; }
-  .sa-tabla-header {
-    display: flex; justify-content: space-between; align-items: center;
-    padding: 16px 20px; border-bottom: 1px solid #f1f5f9;
-  }
-  .sa-link-btn { background: none; border: none; color: #3b82f6; font-size: 12px; cursor: pointer; }
-
-  /* SECTION TITLE */
-  .sa-section-title-row { display: flex; align-items: baseline; gap: 12px; margin-bottom: 16px; }
-  .sa-section-title { font-size: 18px; font-weight: 600; color: #0f172a; margin: 0; }
+  /* TABLA EMPRESA */
+  .sa-section-title { font-size: 16px; font-weight: 600; color: #0f172a; margin: 0; }
   .sa-section-sub { font-size: 13px; color: #94a3b8; }
-
-  /* EMPRESA CARDS */
-  .sa-empresas { display: flex; flex-direction: column; gap: 12px; }
-  .sa-empresa-card {
-    background: white; border-radius: 16px;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.08); overflow: hidden;
-  }
-  .sa-empresa-header {
-    width: 100%; display: flex; justify-content: space-between; align-items: center;
-    padding: 20px 24px; border: none; background: none; cursor: pointer;
-    text-align: left; transition: background 0.15s;
-  }
-  .sa-empresa-header:hover { background: #f8fafc; }
-  .sa-empresa-left { display: flex; align-items: center; gap: 16px; }
-  .sa-empresa-avatar {
-    width: 44px; height: 44px; border-radius: 12px;
-    background: linear-gradient(135deg, #0f2b5c, #2563eb);
-    color: white; font-size: 18px; font-weight: 700;
-    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-  }
-  .sa-empresa-name { font-size: 16px; font-weight: 600; color: #0f172a; margin: 0 0 6px 0; }
-  .sa-empresa-pills { display: flex; gap: 8px; flex-wrap: wrap; }
-  .sa-pill {
-    padding: 2px 10px; border-radius: 20px; font-size: 11px; font-weight: 500;
-  }
-  .sa-pill-total  { background: #f1f5f9; color: #475569; }
-  .sa-pill-green  { background: #f0fdf4; color: #15803d; }
-  .sa-pill-blue   { background: #eff6ff; color: #1d4ed8; }
-  .sa-chevron {
-    font-size: 22px; color: #94a3b8; transition: transform 0.2s;
-    display: inline-block;
-  }
-  .sa-chevron-open { transform: rotate(90deg); }
-
-  .sa-empresa-body {
-    border-top: 1px solid #f1f5f9; padding: 0;
-  }
+  .sa-empresa-card { background: white; border-radius: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); overflow: hidden; }
 
   /* TABLE */
   .sa-table-wrap { overflow-x: auto; }
@@ -401,3 +334,4 @@ saStyles.textContent = `
   }
 `;
 document.head.appendChild(saStyles);
+

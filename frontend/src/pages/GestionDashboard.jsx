@@ -274,11 +274,6 @@ gdStyles.textContent = `
   .gd-hero-title { font-size: 28px; font-weight: 700; color: white; margin: 0 0 6px 0; }
   .gd-hero-sub { color: rgba(255,255,255,0.75); font-size: 14px; margin: 0; }
   .gd-hero-right { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
-  .gd-empresa-select {
-    padding: 9px 14px; border-radius: 10px; border: none; font-size: 13px;
-    background: rgba(255,255,255,0.15); color: white; cursor: pointer; outline: none;
-  }
-  .gd-empresa-select option { background: #1a3d7c; }
   .gd-btn-primary {
     padding: 10px 20px; background: white; color: #1a3d7c; border: none;
     border-radius: 10px; font-weight: 600; font-size: 14px; cursor: pointer;
