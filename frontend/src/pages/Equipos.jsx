@@ -3,7 +3,7 @@
 // ==========================================
 import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
-import { getEquipos, eliminarEquipo, crearEquipo, actualizarEquipo } from '../services/equiposService';
+import { getEquipos, eliminarEquipo, crearEquipo, actualizarEquipo, getEquipoById, reasignarPerifericos } from '../services/equiposService';
 import { getEmpresas } from '../services/empresasService';
 import { getSedes } from '../services/sedesService';
 import { getTiposEquipo, getTiposPeriferico } from '../services/tipoDispositivoService';
@@ -48,6 +48,10 @@ function Equipos() {
   const [importModal, setImportModal] = useState({ estado: 'idle', progreso: 0, total: 0, importados: 0, errores: [] });
   const [tiposEquipo, setTiposEquipo] = useState([]);
   const [tiposPeriferico, setTiposPeriferico] = useState([]);
+  const [modalReasignar, setModalReasignar] = useState(null); // { equipoId, equipoNombre, perifericos, empresaId }
+  const [reasignarDestino, setReasignarDestino] = useState('');
+  const [reasignarSel, setReasignarSel] = useState([]);
+  const [cargandoReasignar, setCargandoReasignar] = useState(false);
 
   const esSuperAdmin = usuario?.rol === 'super_admin';
   const puedeEditar = usuario?.rol === 'super_admin' || usuario?.rol === 'gestion';
@@ -57,26 +61,13 @@ function Equipos() {
     nombre_equipo: '', tipo_id: '', marca: '', modelo: '',
     serial: '', estado: 'Disponible', ubicacion: '', asignado_a: '',
     fecha_asignacion: '', procesador: '', ram: '', disco_duro: '',
-    sistema_operativo: '', garantia: '', especificaciones: '', empresa_id: '',
-    numero_placa: ''
+    sistema_operativo: '', garantia: '', especificaciones: '',
+    observaciones: '', empresa_id: '', numero_placa: ''
   });
 
   const estados = ['Disponible', 'Asignado', 'Préstamo', 'Mantenimiento', 'Dañado', 'Obsoleto', 'Baja'];
 
-  // Empresas cuyos usuarios de gestión pueden dar Baja directamente
-  const EMPRESAS_CON_BAJA = ['emtra', 'emtrasur'];
-
-  const getEstadosForm = (empresaId) => {
-    if (esSuperAdmin) return estados;
-    const empresa = empresas.find(e => String(e.id) === String(empresaId));
-    const nombre = (empresa?.nombre || '').toLowerCase();
-    const puedeBaja = EMPRESAS_CON_BAJA.some(e => nombre.includes(e));
-    // Si el equipo ya tiene Baja (puesta por super_admin), la mantiene visible aunque no pueda cambiarla
-    const yaEsBaja = formData.estado === 'Baja' && !puedeBaja;
-    return puedeBaja
-      ? estados
-      : [...estados.filter(s => s !== 'Baja'), ...(yaEsBaja ? ['Baja'] : [])];
-  };
+  const getEstadosForm = () => estados;
 
   useEffect(() => {
     cargarDatos();
@@ -106,8 +97,8 @@ function Equipos() {
       nombre_equipo: '', tipo_id: '', marca: '', modelo: '',
       serial: '', estado: 'Disponible', ubicacion: '', asignado_a: '',
       fecha_asignacion: '', procesador: '', ram: '', disco_duro: '',
-      sistema_operativo: '', garantia: '', especificaciones: '', empresa_id: '',
-      numero_placa: '', sede: '', prestado_a_empresa_id: ''
+      sistema_operativo: '', garantia: '', especificaciones: '',
+      observaciones: '', empresa_id: '', numero_placa: '', sede: '', prestado_a_empresa_id: ''
     });
     setPerifericos([]);
     setGarantiaValor('');
@@ -127,6 +118,7 @@ function Equipos() {
       procesador: equipo.procesador || '', ram: equipo.ram || '',
       disco_duro: equipo.disco_duro || '', sistema_operativo: equipo.sistema_operativo || '',
       garantia: equipo.garantia || '', especificaciones: equipo.especificaciones || '',
+      observaciones: equipo.observaciones || '',
       empresa_id: equipo.empresa_id || '', numero_placa: equipo.numero_placa || '',
       sede: equipo.sede || '', prestado_a_empresa_id: equipo.prestado_a_empresa_id || ''
     });
@@ -176,6 +168,21 @@ function Equipos() {
       if (result.success) {
         setMostrarModal(false);
         toast.success(equipoEditando ? 'Equipo actualizado correctamente' : 'Equipo creado correctamente');
+
+        // Si se puso en Baja, verificar si tiene periféricos para reasignar
+        if (formData.estado === 'Baja') {
+          const equipoId = equipoEditando?.id || result.data?.id;
+          if (equipoId) {
+            const r = await getEquipoById(equipoId);
+            const perifs = r.success && Array.isArray(r.data?.perifericos) ? r.data.perifericos : [];
+            if (perifs.length > 0) {
+              setModalReasignar({ equipoId, equipoNombre: formData.nombre_equipo, perifericos: perifs, empresaId: formData.empresa_id });
+              setReasignarSel(perifs.map(p => p.id));
+              setReasignarDestino('');
+            }
+          }
+        }
+
         cargarDatos();
       } else {
         setErrorForm(result.message || 'Error al guardar el equipo');
@@ -752,6 +759,85 @@ function Equipos() {
         )}
       </div>
 
+      {/* Modal de reasignación de periféricos */}
+      {modalReasignar && (
+        <div className="modal-overlay" onClick={() => setModalReasignar(null)}>
+          <div className="modal-content" style={{maxWidth:'480px'}} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Reasignar periféricos</h2>
+              <button className="modal-close" onClick={() => setModalReasignar(null)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <p style={{fontSize:'13px',color:'#475569',marginBottom:'14px'}}>
+                El equipo <strong>{modalReasignar.equipoNombre}</strong> fue dado de baja.
+                Selecciona los periféricos que deseas mover a otro equipo.
+              </p>
+
+              {/* Lista de periféricos con checkbox */}
+              <div style={{marginBottom:'14px'}}>
+                <div style={{display:'flex',justifyContent:'space-between',marginBottom:'6px'}}>
+                  <span style={{fontSize:'12px',fontWeight:'600',color:'#374151'}}>Periféricos ({modalReasignar.perifericos.length})</span>
+                  <button type="button" style={{fontSize:'11px',color:'#2563eb',background:'none',border:'none',cursor:'pointer'}}
+                    onClick={() => setReasignarSel(
+                      reasignarSel.length === modalReasignar.perifericos.length
+                        ? []
+                        : modalReasignar.perifericos.map(p => p.id)
+                    )}>
+                    {reasignarSel.length === modalReasignar.perifericos.length ? 'Deseleccionar todo' : 'Seleccionar todo'}
+                  </button>
+                </div>
+                <div style={{border:'1px solid #e2e8f0',borderRadius:'8px',overflow:'hidden'}}>
+                  {modalReasignar.perifericos.map((p, i) => {
+                    const seleccionado = reasignarSel.includes(p.id);
+                    const label = [p.tipo_nombre, p.marca, p.modelo, p.serial, p.descripcion].filter(Boolean).join(' — ') || `Periférico ${i + 1}`;
+                    return (
+                      <label key={p.id} style={{display:'flex',alignItems:'center',gap:'10px',padding:'9px 12px',background: seleccionado ? '#eff6ff' : '#fff',borderBottom: i < modalReasignar.perifericos.length - 1 ? '1px solid #e2e8f0' : 'none',cursor:'pointer'}}>
+                        <input type="checkbox" checked={seleccionado}
+                          onChange={() => setReasignarSel(prev => prev.includes(p.id) ? prev.filter(x => x !== p.id) : [...prev, p.id])} />
+                        <span style={{fontSize:'12px',color:'#334155'}}>{label}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Selector de equipo destino */}
+              <div style={{marginBottom:'6px'}}>
+                <label style={{fontSize:'12px',fontWeight:'600',color:'#374151',display:'block',marginBottom:'6px'}}>Equipo destino <span style={{color:'#ef4444'}}>*</span></label>
+                <select style={{width:'100%',padding:'8px 10px',border:'1px solid #d1dce6',borderRadius:'6px',fontSize:'13px',outline:'none'}}
+                  value={reasignarDestino} onChange={e => setReasignarDestino(e.target.value)}>
+                  <option value="">Seleccionar equipo...</option>
+                  {equipos
+                    .filter(e => e.empresa_id === modalReasignar.empresaId && e.id !== modalReasignar.equipoId && e.estado !== 'Baja')
+                    .map(e => <option key={e.id} value={e.id}>{e.nombre_equipo}{e.serial ? ` — ${e.serial}` : ''}</option>)
+                  }
+                </select>
+              </div>
+            </div>
+            <div className="modal-footer" style={{gap:'8px'}}>
+              <button className="btn-cancel" onClick={() => setModalReasignar(null)}>Omitir</button>
+              <button className="btn-save" disabled={cargandoReasignar || !reasignarDestino || reasignarSel.length === 0}
+                onClick={async () => {
+                  setCargandoReasignar(true);
+                  try {
+                    const r = await reasignarPerifericos(modalReasignar.equipoId, Number(reasignarDestino), reasignarSel);
+                    if (r.success) {
+                      toast.success(r.message);
+                      setModalReasignar(null);
+                      cargarDatos();
+                    } else {
+                      toast.error(r.message || 'Error al reasignar');
+                    }
+                  } catch { toast.error('Error de conexión'); }
+                  finally { setCargandoReasignar(false); }
+                }}>
+                {cargandoReasignar ? 'Reasignando...' : `Reasignar (${reasignarSel.length})`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal de creación/edición */}
       {mostrarModal && (
         <div className="modal-overlay" onClick={() => setMostrarModal(false)}>
@@ -791,7 +877,24 @@ function Equipos() {
                       {tiposEquipo.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
                     </select>
                   </div>
-                  <div className="form-group req"><label>Estado</label><select value={formData.estado} onChange={e => setFormData({...formData, estado: e.target.value, prestado_a_empresa_id: e.target.value !== 'Préstamo' ? '' : formData.prestado_a_empresa_id})}>{getEstadosForm(formData.empresa_id).map(s => <option key={s} value={s}>{s}</option>)}</select></div>
+                  <div className="form-group req"><label>Estado</label><select value={formData.estado} onChange={e => setFormData({...formData, estado: e.target.value, prestado_a_empresa_id: e.target.value !== 'Préstamo' ? '' : formData.prestado_a_empresa_id})}>{getEstadosForm().map(s => <option key={s} value={s}>{s}</option>)}</select></div>
+                  {(['Dañado', 'Mantenimiento', 'Baja'].includes(formData.estado) || formData.observaciones) && (
+                    <div className="form-group req observaciones-group">
+                      <label className="observaciones-label">
+                        Falla / Observaciones
+                        {['Dañado', 'Mantenimiento', 'Baja'].includes(formData.estado) && (
+                          <span className="observaciones-badge">{formData.estado}</span>
+                        )}
+                      </label>
+                      <textarea
+                        rows={3}
+                        required={['Dañado', 'Mantenimiento', 'Baja'].includes(formData.estado)}
+                        placeholder="Describe la falla o posible falla del equipo..."
+                        value={formData.observaciones}
+                        onChange={e => setFormData({...formData, observaciones: e.target.value})}
+                      />
+                    </div>
+                  )}
                   {formData.estado === 'Préstamo' && (
                     <div className="form-group req">
                       <label>Prestado a empresa</label>
@@ -918,6 +1021,12 @@ function Equipos() {
               <div><strong>RAM:</strong> {equipoDetalle.ram || '-'}</div>
               <div><strong>Disco Duro:</strong> {equipoDetalle.disco_duro || '-'}</div>
               <div><strong>Sistema Operativo:</strong> {equipoDetalle.sistema_operativo || '-'}</div>
+              {equipoDetalle.observaciones && (
+                <div style={{ gridColumn: '1 / -1', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: '8px', padding: '10px 14px' }}>
+                  <p style={{ margin: '0 0 4px', fontSize: '11px', fontWeight: '700', color: '#c2410c', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Falla / Observaciones</p>
+                  <p style={{ margin: 0, fontSize: '13px', color: '#431407', whiteSpace: 'pre-wrap' }}>{equipoDetalle.observaciones}</p>
+                </div>
+              )}
               <div><strong>Empresa:</strong> {empresas.find(e => e.id === equipoDetalle.empresa_id)?.nombre || '-'}</div>
               <div><strong>Sede:</strong> {equipoDetalle.sede || <span style={{color:'#94a3b8'}}>Sin sede</span>}</div>
               {equipoDetalle.estado === 'Préstamo' && equipoDetalle.prestado_a_empresa_id && (
@@ -1104,6 +1213,11 @@ equiposStyles.textContent = `
   .periferico-card-fields { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
   .periferico-desc { grid-column: 1 / -1; }
   .modal-error { background: #fed7d7; color: #742a2a; padding: 6px 10px; margin: 0 12px 10px 12px; border-radius: 5px; font-size: 11px; }
+  .observaciones-group { grid-column: 1 / -1; }
+  .observaciones-group textarea { width: 100%; padding: 8px 10px; border: 1px solid #fed7aa; border-radius: 6px; font-size: 12px; outline: none; resize: vertical; background: #fff7ed; font-family: inherit; box-sizing: border-box; }
+  .observaciones-group textarea:focus { border-color: #f97316; box-shadow: 0 0 0 2px rgba(249,115,22,.15); }
+  .observaciones-label { display: flex; align-items: center; gap: 6px; }
+  .observaciones-badge { background: #f97316; color: #fff; border-radius: 4px; padding: 1px 6px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; }
   
   .form-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
   .form-group { margin-bottom: 0; }

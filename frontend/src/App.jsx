@@ -104,7 +104,6 @@ function AppContent() {
         <Route path="/" element={<Navigate to="/dashboard" />} />
         <Route path="/dashboard" element={<VisualizadorDashboard />} />
         <Route path="/equipos" element={<Equipos />} />
-        <Route path="/sedes" element={<Sedes />} />
       </Routes>
     </Layout>
   );

@@ -84,8 +84,8 @@ const actualizarPlaca = async (req, res) => {
         const { id } = req.params;
         const { equipo_id, empresa_id, numero, fecha_asignacion, estado, notas } = req.body;
 
-        if (!numero?.trim())
-            return res.status(400).json({ success: false, message: 'El número de placa es requerido' });
+        if (!numero?.trim() || !empresa_id)
+            return res.status(400).json({ success: false, message: 'Número de placa y empresa son requeridos' });
 
         const numCheck = await pool.query(
             'SELECT id FROM placas WHERE numero = $1 AND empresa_id = $2 AND id != $3',

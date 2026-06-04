@@ -36,6 +36,13 @@ export const getPapelera = async () => {
   return await api.get('/equipos/papelera');
 };
 
+export const reasignarPerifericos = async (equipoId, destinoEquipoId, perifericosIds) => {
+  return await api.post(`/equipos/${equipoId}/reasignar-perifericos`, {
+    destino_equipo_id: destinoEquipoId,
+    perifericos_ids: perifericosIds
+  });
+};
+
 export const getHistorial = async (params = {}) => {
   return await api.get('/historial', { params });
 };

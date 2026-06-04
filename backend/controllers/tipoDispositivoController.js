@@ -37,7 +37,20 @@ const crearTipo = async (req, res) => {
 const eliminarTipo = async (req, res) => {
     try {
         const { id } = req.params;
-        await pool.query('DELETE FROM tipo_dispositivo WHERE id = $1', [id]);
+
+        const enUso = await pool.query(
+            `SELECT
+                (SELECT COUNT(*) FROM equipos   WHERE tipo_id = $1) +
+                (SELECT COUNT(*) FROM perifericos WHERE tipo_id = $1) AS total`,
+            [id]
+        );
+        if (Number(enUso.rows[0].total) > 0)
+            return res.status(409).json({ success: false, message: 'No se puede eliminar: el tipo está en uso por equipos o periféricos' });
+
+        const result = await pool.query('DELETE FROM tipo_dispositivo WHERE id = $1 RETURNING id', [id]);
+        if (result.rows.length === 0)
+            return res.status(404).json({ success: false, message: 'Tipo no encontrado' });
+
         res.json({ success: true, message: 'Tipo eliminado' });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
