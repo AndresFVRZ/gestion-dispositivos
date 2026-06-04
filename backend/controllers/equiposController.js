@@ -1,32 +1,86 @@
 const pool = require('../config/db');
 const { registrarHistorial } = require('../utils/helpers');
 
+// Subquery reutilizable para incluir periféricos con su tipo
+const PERIFERICOS_SUBQUERY = `
+    COALESCE(
+        (SELECT json_agg(json_build_object(
+            'id',          p.id,
+            'tipo_id',     p.tipo_id,
+            'tipo_nombre', td.nombre,
+            'marca',       p.marca,
+            'modelo',      p.modelo,
+            'serial',      p.serial,
+            'descripcion', p.descripcion
+         ) ORDER BY p.id)
+         FROM perifericos p
+         LEFT JOIN tipo_dispositivo td ON td.id = p.tipo_id
+         WHERE p.equipo_id = eq.id),
+        '[]'::json
+    ) AS perifericos
+`;
+
+// Guarda (borra y re-inserta) los periféricos de un equipo.
+// Solo acepta tipo_id cuya categoria='periferico' en tipo_dispositivo.
+const guardarPerifericos = async (equipoId, perifericos) => {
+    await pool.query('DELETE FROM perifericos WHERE equipo_id = $1', [equipoId]);
+    if (!Array.isArray(perifericos)) return;
+
+    const tiposIds = [...new Set(perifericos.map(p => p?.tipo_id).filter(Boolean))];
+    let tiposValidos = new Set();
+    if (tiposIds.length > 0) {
+        const check = await pool.query(
+            `SELECT id FROM tipo_dispositivo WHERE id = ANY($1::int[]) AND categoria = 'periferico'`,
+            [tiposIds]
+        );
+        tiposValidos = new Set(check.rows.map(r => r.id));
+    }
+
+    for (const p of perifericos) {
+        const rawId = p?.tipo_id ? Number(p.tipo_id) : null;
+        const tipo_id    = rawId && tiposValidos.has(rawId) ? rawId : null;
+        const marca      = typeof p === 'object' ? (p?.marca      || '').trim() || null : null;
+        const modelo     = typeof p === 'object' ? (p?.modelo     || '').trim() || null : null;
+        const serial     = typeof p === 'object' ? (p?.serial     || '').trim() || null : null;
+        const descripcion = (typeof p === 'string' ? p : p?.descripcion || '').trim() || null;
+        if (tipo_id || marca || modelo || serial || descripcion) {
+            await pool.query(
+                `INSERT INTO perifericos (equipo_id, tipo_id, marca, modelo, serial, descripcion)
+                 VALUES ($1, $2, $3, $4, $5, $6)`,
+                [equipoId, tipo_id, marca, modelo, serial, descripcion]
+            );
+        }
+    }
+};
+
 const getEquipos = async (req, res) => {
     try {
         const usuario = req.usuario;
-        
+
         if (!usuario) {
             return res.status(401).json({ success: false, message: 'No autorizado' });
         }
-        
+
         let query = `
-            SELECT eq.*, e.nombre as empresa_nombre
+            SELECT eq.*, e.nombre as empresa_nombre,
+                   td.nombre as tipo_nombre, ${PERIFERICOS_SUBQUERY}
             FROM equipos eq
             JOIN empresas e ON eq.empresa_id = e.id
+            LEFT JOIN tipo_dispositivo td ON eq.tipo_id = td.id
             WHERE eq.eliminado = FALSE
         `;
-        
+
         let params = [];
-        
+
         if (usuario.rol !== 'super_admin') {
             let empresaIds = [];
-            
+
             if (usuario.empresas && usuario.empresas.length > 0) {
                 empresaIds = usuario.empresas.map(e => e.id);
             } else if (usuario.empresa_id) {
                 empresaIds = [usuario.empresa_id];
             }
-            
+
             if (empresaIds.length > 0) {
                 query += ` AND eq.empresa_id = ANY($1::int[])`;
                 params.push(empresaIds);
@@ -34,8 +88,8 @@ const getEquipos = async (req, res) => {
                 return res.json({ success: true, data: [] });
             }
         }
-        
-        query += ` ORDER BY e.nombre, eq.tipo, eq.codigo`;
+
+        query += ` ORDER BY e.nombre, td.nombre, eq.codigo`;
         const result = await pool.query(query, params);
         res.json({ success: true, data: result.rows });
     } catch (error) {
@@ -48,11 +102,13 @@ const getEquiposByEmpresa = async (req, res) => {
     try {
         const { empresaId } = req.params;
         const query = `
-            SELECT eq.*, e.nombre as empresa_nombre
+            SELECT eq.*, e.nombre as empresa_nombre,
+                   td.nombre as tipo_nombre, ${PERIFERICOS_SUBQUERY}
             FROM equipos eq
             JOIN empresas e ON eq.empresa_id = e.id
+            LEFT JOIN tipo_dispositivo td ON eq.tipo_id = td.id
             WHERE eq.empresa_id = $1 AND eq.eliminado = FALSE
-            ORDER BY eq.tipo, eq.codigo
+            ORDER BY td.nombre, eq.nombre_equipo
         `;
         const result = await pool.query(query, [empresaId]);
         res.json({ success: true, data: result.rows });
@@ -68,9 +124,8 @@ const getEquiposByEmpresa = async (req, res) => {
 const crearEquipo = async (req, res) => {
     try {
         const {
-            codigo,
             nombre_equipo,
-            tipo,
+            tipo_id,
             marca,
             modelo,
             serial,
@@ -84,24 +139,43 @@ const crearEquipo = async (req, res) => {
             sistema_operativo,
             garantia,
             especificaciones,
-            empresa_id
+            empresa_id,
+            numero_placa,
+            sede,
+            prestado_a_empresa_id,
+            perifericos
         } = req.body;
 
+        if (tipo_id) {
+            const tipoCheck = await pool.query(
+                `SELECT categoria FROM tipo_dispositivo WHERE id = $1`, [tipo_id]
+            );
+            if (tipoCheck.rows.length === 0 || tipoCheck.rows[0].categoria !== 'equipo') {
+                return res.status(400).json({ success: false, message: 'El tipo seleccionado no es válido para equipos' });
+            }
+        }
+
+        const fechaAsig = fecha_asignacion || null;
+        const garantiaVal = garantia || null;
+
         const result = await pool.query(
-            `INSERT INTO equipos 
-                (codigo, nombre_equipo, tipo, marca, modelo, serial, estado,
+            `INSERT INTO equipos
+                (nombre_equipo, tipo_id, marca, modelo, serial, estado,
                  ubicacion, asignado_a, fecha_asignacion, procesador, ram, disco_duro,
-                 sistema_operativo, garantia, especificaciones, empresa_id, created_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, NOW())
+                 sistema_operativo, garantia, especificaciones, empresa_id, numero_placa, sede,
+                 prestado_a_empresa_id, created_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, NOW())
              RETURNING *`,
             [
-                codigo, nombre_equipo, tipo, marca, modelo, serial, estado,
-                ubicacion, asignado_a, fecha_asignacion, procesador, ram, disco_duro,
-                sistema_operativo, garantia, especificaciones, empresa_id
+                nombre_equipo, tipo_id || null, marca, modelo, serial, estado,
+                ubicacion, asignado_a, fechaAsig, procesador, ram, disco_duro,
+                sistema_operativo, garantiaVal, especificaciones, empresa_id,
+                numero_placa || null, sede || null, prestado_a_empresa_id || null
             ]
         );
 
-        await registrarHistorial(pool, req, 'CREAR', result.rows[0], `Equipo creado: ${codigo}`);
+        await guardarPerifericos(result.rows[0].id, perifericos);
+        await registrarHistorial(pool, req, 'CREAR', result.rows[0], `Equipo creado: ${serial || nombre_equipo}`);
 
         res.status(201).json({ success: true, data: result.rows[0] });
     } catch (error) {
@@ -117,9 +191,8 @@ const actualizarEquipo = async (req, res) => {
     try {
         const { id } = req.params;
         const {
-            codigo,
             nombre_equipo,
-            tipo,
+            tipo_id,
             marca,
             modelo,
             serial,
@@ -133,21 +206,41 @@ const actualizarEquipo = async (req, res) => {
             sistema_operativo,
             garantia,
             especificaciones,
-            empresa_id
+            empresa_id,
+            numero_placa,
+            sede,
+            prestado_a_empresa_id,
+            perifericos
         } = req.body;
 
+        if (tipo_id) {
+            const tipoCheck = await pool.query(
+                `SELECT categoria FROM tipo_dispositivo WHERE id = $1`, [tipo_id]
+            );
+            if (tipoCheck.rows.length === 0 || tipoCheck.rows[0].categoria !== 'equipo') {
+                return res.status(400).json({ success: false, message: 'El tipo seleccionado no es válido para equipos' });
+            }
+        }
+
+        const fechaAsig = fecha_asignacion || null;
+        const garantiaVal = garantia || null;
+
         const result = await pool.query(
-            `UPDATE equipos SET 
-                codigo = $1, nombre_equipo = $2, tipo = $3, marca = $4, modelo = $5,
-                serial = $6, estado = $7, ubicacion = $8, asignado_a = $9,
-                fecha_asignacion = $10, procesador = $11, ram = $12, disco_duro = $13,
-                sistema_operativo = $14, garantia = $15, especificaciones = $16, empresa_id = $17
-             WHERE id = $18 AND eliminado = FALSE
+            `UPDATE equipos SET
+                nombre_equipo = $1, tipo_id = $2, marca = $3, modelo = $4,
+                serial = $5, estado = $6, ubicacion = $7, asignado_a = $8,
+                fecha_asignacion = $9, procesador = $10, ram = $11, disco_duro = $12,
+                sistema_operativo = $13, garantia = $14, especificaciones = $15,
+                empresa_id = $16, numero_placa = $17, sede = $18,
+                prestado_a_empresa_id = $19
+             WHERE id = $20 AND eliminado = FALSE
              RETURNING *`,
             [
-                codigo, nombre_equipo, tipo, marca, modelo, serial, estado,
-                ubicacion, asignado_a, fecha_asignacion, procesador, ram, disco_duro,
-                sistema_operativo, garantia, especificaciones, empresa_id, id
+                nombre_equipo, tipo_id || null, marca, modelo, serial, estado,
+                ubicacion, asignado_a, fechaAsig, procesador, ram, disco_duro,
+                sistema_operativo, garantiaVal, especificaciones, empresa_id,
+                numero_placa || null, sede || null,
+                prestado_a_empresa_id || null, id
             ]
         );
 
@@ -155,7 +248,8 @@ const actualizarEquipo = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Equipo no encontrado' });
         }
 
-        await registrarHistorial(pool, req, 'EDITAR', result.rows[0], `Equipo editado: ${codigo}`);
+        await guardarPerifericos(id, perifericos);
+        await registrarHistorial(pool, req, 'EDITAR', result.rows[0], `Equipo editado: ${serial || nombre_equipo}`);
 
         res.json({ success: true, data: result.rows[0] });
     } catch (error) {

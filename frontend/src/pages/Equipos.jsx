@@ -5,10 +5,12 @@ import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { getEquipos, eliminarEquipo, crearEquipo, actualizarEquipo } from '../services/equiposService';
 import { getEmpresas } from '../services/empresasService';
+import { getSedes } from '../services/sedesService';
+import { getTiposEquipo, getTiposPeriferico } from '../services/tipoDispositivoService';
 import { useAuth } from '../context/AuthContext';
 import ConfirmModal from '../components/Common/ConfirmModal';
 import ImportModal from '../components/Common/ImportModal';
-import { calcularGarantia, textoGarantia, colorGarantia } from '../utils/garantia';
+import { calcularGarantia, textoGarantia, colorGarantia, aTotalDias, diasADisplay, formatearDias } from '../utils/garantia';
 import { getLogoEmpresa } from '../utils/logos';
 import * as XLSX from 'xlsx';
 
@@ -19,9 +21,11 @@ function Equipos() {
   const { usuario } = useAuth();
   const [equipos, setEquipos] = useState([]);
   const [empresas, setEmpresas] = useState([]);
+  const [sedes, setSedes] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [filtroBusqueda, setFiltroBusqueda] = useState('');
   const [filtroEstado, setFiltroEstado] = useState('');
+  const [filtroArea, setFiltroArea] = useState('');
   const [mostrarModal, setMostrarModal] = useState(false);
   const [equipoEditando, setEquipoEditando] = useState(null);
   const [cargandoForm, setCargandoForm] = useState(false);
@@ -37,23 +41,42 @@ function Equipos() {
   const [mensajeOperacion, setMensajeOperacion] = useState('');
   const [modoSeleccion, setModoSeleccion] = useState(false);
   const [seleccionados, setSeleccionados] = useState([]);
-  const [camposExtra, setCamposExtra] = useState([]);
+  const [perifericos, setPerifericos] = useState([]);
+  const [garantiaValor, setGarantiaValor] = useState('');
+  const [garantiaUnidad, setGarantiaUnidad] = useState('meses');
   const [confirm, setConfirm] = useState(null);
   const [importModal, setImportModal] = useState({ estado: 'idle', progreso: 0, total: 0, importados: 0, errores: [] });
+  const [tiposEquipo, setTiposEquipo] = useState([]);
+  const [tiposPeriferico, setTiposPeriferico] = useState([]);
 
   const esSuperAdmin = usuario?.rol === 'super_admin';
   const puedeEditar = usuario?.rol === 'super_admin' || usuario?.rol === 'gestion';
   const puedeEliminar = usuario?.rol === 'super_admin';
 
   const [formData, setFormData] = useState({
-    codigo: '', nombre_equipo: '', tipo: 'Desktop', marca: '', modelo: '',
+    nombre_equipo: '', tipo_id: '', marca: '', modelo: '',
     serial: '', estado: 'Disponible', ubicacion: '', asignado_a: '',
     fecha_asignacion: '', procesador: '', ram: '', disco_duro: '',
-    sistema_operativo: '', garantia: '', especificaciones: '', empresa_id: ''
+    sistema_operativo: '', garantia: '', especificaciones: '', empresa_id: '',
+    numero_placa: ''
   });
 
-  const tipos = ['Desktop', 'Laptop', 'Server'];
-  const estados = ['Disponible', 'Asignado', 'Préstamo', 'Mantenimiento', 'Dañado', 'Baja'];
+  const estados = ['Disponible', 'Asignado', 'Préstamo', 'Mantenimiento', 'Dañado', 'Obsoleto', 'Baja'];
+
+  // Empresas cuyos usuarios de gestión pueden dar Baja directamente
+  const EMPRESAS_CON_BAJA = ['emtra', 'emtrasur'];
+
+  const getEstadosForm = (empresaId) => {
+    if (esSuperAdmin) return estados;
+    const empresa = empresas.find(e => String(e.id) === String(empresaId));
+    const nombre = (empresa?.nombre || '').toLowerCase();
+    const puedeBaja = EMPRESAS_CON_BAJA.some(e => nombre.includes(e));
+    // Si el equipo ya tiene Baja (puesta por super_admin), la mantiene visible aunque no pueda cambiarla
+    const yaEsBaja = formData.estado === 'Baja' && !puedeBaja;
+    return puedeBaja
+      ? estados
+      : [...estados.filter(s => s !== 'Baja'), ...(yaEsBaja ? ['Baja'] : [])];
+  };
 
   useEffect(() => {
     cargarDatos();
@@ -62,9 +85,14 @@ function Equipos() {
   const cargarDatos = async () => {
     try {
       setCargando(true);
-      const [empresasData, equiposData] = await Promise.all([getEmpresas(), getEquipos()]);
+      const [empresasData, equiposData, sedesData, tiposEqData, tipsPeriData] = await Promise.all([
+        getEmpresas(), getEquipos(), getSedes(), getTiposEquipo(), getTiposPeriferico()
+      ]);
       if (empresasData.success) setEmpresas(empresasData.data);
-      if (equiposData.success) setEquipos(equiposData.data);
+      if (equiposData.success)  setEquipos(equiposData.data);
+      if (sedesData.success)    setSedes(sedesData.data);
+      if (tiposEqData.success)  setTiposEquipo(tiposEqData.data);
+      if (tipsPeriData.success) setTiposPeriferico(tipsPeriData.data);
     } catch (error) {
       console.error('Error:', error);
     } finally {
@@ -72,24 +100,18 @@ function Equipos() {
     }
   };
 
-  const parsearCamposExtra = (especificaciones) => {
-    try {
-      const parsed = JSON.parse(especificaciones || '[]');
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return especificaciones ? [{ valor: especificaciones }] : [];
-    }
-  };
-
   const abrirModalCrear = () => {
     setEquipoEditando(null);
     setFormData({
-      codigo: '', nombre_equipo: '', tipo: 'Desktop', marca: '', modelo: '',
+      nombre_equipo: '', tipo_id: '', marca: '', modelo: '',
       serial: '', estado: 'Disponible', ubicacion: '', asignado_a: '',
       fecha_asignacion: '', procesador: '', ram: '', disco_duro: '',
-      sistema_operativo: '', garantia: '', especificaciones: '', empresa_id: ''
+      sistema_operativo: '', garantia: '', especificaciones: '', empresa_id: '',
+      numero_placa: '', sede: '', prestado_a_empresa_id: ''
     });
-    setCamposExtra([]);
+    setPerifericos([]);
+    setGarantiaValor('');
+    setGarantiaUnidad('meses');
     setErrorForm('');
     setMostrarModal(true);
   };
@@ -97,17 +119,33 @@ function Equipos() {
   const abrirModalEditar = (equipo) => {
     setEquipoEditando(equipo);
     setFormData({
-      codigo: equipo.codigo || '', nombre_equipo: equipo.nombre_equipo || '',
-      tipo: equipo.tipo || 'Desktop', marca: equipo.marca || '',
+      nombre_equipo: equipo.nombre_equipo || '',
+      tipo_id: equipo.tipo_id || '', marca: equipo.marca || '',
       modelo: equipo.modelo || '', serial: equipo.serial || '',
       estado: equipo.estado || 'Disponible', ubicacion: equipo.ubicacion || '',
       asignado_a: equipo.asignado_a || '', fecha_asignacion: equipo.fecha_asignacion || '',
       procesador: equipo.procesador || '', ram: equipo.ram || '',
       disco_duro: equipo.disco_duro || '', sistema_operativo: equipo.sistema_operativo || '',
       garantia: equipo.garantia || '', especificaciones: equipo.especificaciones || '',
-      empresa_id: equipo.empresa_id || ''
+      empresa_id: equipo.empresa_id || '', numero_placa: equipo.numero_placa || '',
+      sede: equipo.sede || '', prestado_a_empresa_id: equipo.prestado_a_empresa_id || ''
     });
-    setCamposExtra(parsearCamposExtra(equipo.especificaciones));
+    setPerifericos(
+      (Array.isArray(equipo.perifericos) ? equipo.perifericos : []).map(p =>
+        typeof p === 'string'
+          ? { tipo_id: '', marca: '', modelo: '', serial: '', descripcion: p }
+          : {
+              tipo_id:     p.tipo_id     || '',
+              marca:       p.marca       || '',
+              modelo:      p.modelo      || '',
+              serial:      p.serial      || '',
+              descripcion: p.descripcion || ''
+            }
+      )
+    );
+    const disp = diasADisplay(equipo.garantia);
+    setGarantiaValor(disp.valor ? String(disp.valor) : '');
+    setGarantiaUnidad(disp.unidad);
     setErrorForm('');
     setMostrarModal(true);
   };
@@ -123,20 +161,21 @@ function Equipos() {
     setErrorForm('');
 
     try {
-      const camposFiltrados = camposExtra.filter(c => c.valor?.trim());
-      const dataConExtras = {
+      const payload = {
         ...formData,
-        especificaciones: camposFiltrados.length > 0 ? JSON.stringify(camposFiltrados) : ''
+        garantia: aTotalDias(garantiaValor, garantiaUnidad),
+        perifericos: perifericos.filter(p => p.tipo_id || p.marca?.trim() || p.modelo?.trim() || p.serial?.trim() || p.descripcion?.trim())
       };
 
       let result;
       if (equipoEditando) {
-        result = await actualizarEquipo(equipoEditando.id, dataConExtras);
+        result = await actualizarEquipo(equipoEditando.id, payload);
       } else {
-        result = await crearEquipo(dataConExtras);
+        result = await crearEquipo(payload);
       }
       if (result.success) {
         setMostrarModal(false);
+        toast.success(equipoEditando ? 'Equipo actualizado correctamente' : 'Equipo creado correctamente');
         cargarDatos();
       } else {
         setErrorForm(result.message || 'Error al guardar el equipo');
@@ -214,6 +253,13 @@ function Equipos() {
     if (!file) return;
     event.target.value = '';
 
+    // Refrescar empresas en el momento del import para tener la lista más actualizada
+    let empresasParaImport = empresas;
+    try {
+      const empRes = await getEmpresas();
+      if (empRes.success && empRes.data.length > 0) empresasParaImport = empRes.data;
+    } catch (_) {}
+
     const reader = new FileReader();
     reader.onload = async (e) => {
       try {
@@ -274,55 +320,125 @@ function Equipos() {
           'MANTENIMIENTO': 'Mantenimiento', 'DAÑADO': 'Dañado',
         };
 
+        const normKey = (s) =>
+          s.toLowerCase().trim()
+           .normalize('NFD').replace(/[̀-ͯ]/g, '')
+           .replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ');
+
+        const normEmp = normKey;
+
         for (let i = 0; i < rows.length; i++) {
           setImportModal(prev => ({ ...prev, progreso: i + 1 }));
           const row = rows[i];
           try {
-            // Normalizar claves: minúsculas + sin espacios extras para lectura flexible
+            // Normalizar claves del Excel para lectura flexible
             const col = {};
             Object.keys(row).forEach(k => {
-              col[k.toLowerCase().trim().normalize('NFD').replace(/[̀-ͯ]/g, '')] = row[k];
+              col[normKey(k)] = row[k];
             });
-            const g = (key) => String(col[key] ?? '').trim();
+            const g = (...keys) => {
+              for (const key of keys) {
+                const v = String(col[normKey(key)] ?? '').trim();
+                if (v) return v;
+              }
+              return '';
+            };
 
-            const nombre_equipo     = g('nombre_equipo');
-            const tipo              = g('tipo')              || 'Desktop';
-            const marca             = g('marca');
-            const modelo            = g('modelo');
-            const serial            = g('serial');
-            const ubicacion         = g('area') || g('ubicacion');
-            const asignado_a        = g('asignado_a');
-            const procesador        = g('procesador');
-            const ram               = g('ram');              // cubre "Ram", "RAM"
-            const disco_duro        = g('disco_duro');
-            const sistema_operativo = g('sistema_operativo');
-            const garantia          = g('garantia');
-            const empresaNombre     = g('empresa');          // cubre "Empresa", "EMPRESA"
+            // ── Empresa ──────────────────────────────────────────────
+            const empresaNombre = g('empresa', 'em', 'compania', 'company');
 
-            let estado = String(row['estado'] || 'Disponible').trim();
-            estado = estadoMap[estado.toUpperCase()] || estado || 'Disponible';
+            const excelNorm = normEmp(empresaNombre);
+            const empresaEncontrada = empresasParaImport.find(emp => {
+              const dbNorm = normEmp(emp.nombre);
+              return dbNorm === excelNorm ||
+                     dbNorm.includes(excelNorm) ||
+                     excelNorm.includes(dbNorm);
+            });
 
-            // Código: usar serial si existe, si no generar EQ-XXXX
-            const codigo = serial || `EQ-${String(i + 1).padStart(4, '0')}`;
-
-            if (!nombre_equipo) {
-              errores.push(`Fila ${i + 1}: Falta el nombre del equipo`);
+            if (!empresaEncontrada) {
+              errores.push(`Fila ${i + 1}: Empresa "${empresaNombre || '(vacía)'}" no encontrada`);
               continue;
             }
 
-            const empresaEncontrada = empresas.find(
-              emp => emp.nombre.trim().toLowerCase() === empresaNombre.toLowerCase()
-            );
-            if (!empresaEncontrada) {
-              errores.push(`Fila ${i + 1} (${codigo}): Empresa "${empresaNombre || '(vacía)'}" no encontrada`);
-              continue;
+            // ── Campos principales ────────────────────────────────────
+            const marca  = g('marca');
+            const modelo = g('modelo');
+            const serial = g('serial');
+
+            // nombre_equipo: columna propia o combinación marca+modelo
+            const nombre_equipo =
+              g('nombre_equipo', 'nombre equipo', 'equipo', 'nombre') ||
+              [marca, modelo].filter(Boolean).join(' ') ||
+              `EQ-${String(i + 1).padStart(4, '0')}`;
+
+            // código: placa inventario → serial → auto
+            const codigo =
+              g('placa inventario', 'placa', 'num inventario', 'codigo') ||
+              serial ||
+              `EQ-${String(i + 1).padStart(4, '0')}`;
+
+            const numero_placa = g('placa inventario', 'placa', 'num inventario');
+
+            // tipo equipo
+            const tipoRaw = g('tipo equipo', 'tipo').toUpperCase();
+            const tipoMap = {
+              'LAPTOP': 'Portátil', 'PORTATIL': 'Portátil', 'PORTÁTIL': 'Portátil',
+              'SERVER': 'Computadora', 'SERVIDOR': 'Computadora',
+              'TODO EN UNO': 'Todo en uno', 'ALL IN ONE': 'Todo en uno',
+              'DESKTOP': 'Desktop', 'PC': 'Desktop', 'ESCRITORIO': 'Desktop',
+              'COMPUTADORA': 'Desktop', 'COMPUTADOR': 'Desktop',
+            };
+            const tipoTexto = tipoMap[tipoRaw] || '';
+            const tipoEncontrado = tiposEquipo.find(t => t.nombre.toLowerCase() === tipoTexto.toLowerCase());
+            const tipo_id = tipoEncontrado?.id || null;
+
+            // ubicación
+            const ubicacion = g('ubicacion', 'ubicación', 'area', 'área');
+
+            // sistema operativo = SO + VERSION
+            const so      = g('so', 'sistema operativo', 'sistema_operativo');
+            const version = g('version', 'version so');
+            const sistema_operativo = [so, version].filter(Boolean).join(' ') || '';
+
+            // procesador = PROCESADOR + VELOCIDAD
+            const proc     = g('procesador', 'cpu');
+            const velocidad = g('velocidad', 'frecuencia');
+            const procesador = [proc, velocidad].filter(Boolean).join(' ');
+
+            // disco = DD + TECNOLOGIA
+            const dd   = g('dd', 'disco duro', 'disco', 'almacenamiento');
+            const tech = g('tecnologia', 'tecnología');
+            const disco_duro = [dd, tech].filter(Boolean).join(' ');
+
+            const ram       = g('ram', 'memoria');
+            const garantia  = g('garantia', 'garantía');
+            const asignado_a = g('usuario pc', 'usuario', 'asignado a', 'asignado_a', 'encargado');
+            const fecha_asignacion = g('fecha', 'fecha asignacion', 'fecha instalacion') || null;
+            const sede_nombre = g('sede');
+
+            // estado
+            let estado = g('estado', 'de baja') || 'Disponible';
+            estado = estadoMap[estado.toUpperCase()] || 'Disponible';
+
+            // ── Periféricos (DISP 1..5) ───────────────────────────────
+            const perifericos = [];
+            for (let d = 1; d <= 5; d++) {
+              const nom    = g(`nom disp ${d}`, `nombre disp ${d}`);
+              const mod    = g(`mod disp ${d}`, `modelo disp ${d}`);
+              const marka  = g(`marca disp ${d}`);
+              const numInv = g(`num inven disp ${d}`, `num inv disp ${d}`);
+              const parts  = [nom, marka, mod, numInv].filter(Boolean);
+              if (parts.length) perifericos.push({ tipo_id: null, descripcion: parts.join(' - ') });
             }
 
             const result = await crearEquipo({
-              codigo, nombre_equipo, tipo, marca, modelo, serial,
+              codigo, nombre_equipo, tipo_id, marca, modelo, serial,
               estado, ubicacion, asignado_a, procesador, ram,
               disco_duro, sistema_operativo, garantia,
+              fecha_asignacion: fecha_asignacion || null,
+              numero_placa: numero_placa || null,
               empresa_id: empresaEncontrada.id,
+              perifericos,
             });
             if (result.success) importados++;
             else errores.push(`Fila ${i + 1} (${codigo}): ${result.message}`);
@@ -348,7 +464,7 @@ function Equipos() {
     try {
       const dataToExport = equiposFiltrados.map(equipo => ({
         'Código': equipo.codigo || '', 'Equipo': equipo.nombre_equipo || '',
-        'Tipo': equipo.tipo || '', 'Marca': equipo.marca || '',
+        'Tipo': equipo.tipo_nombre || '', 'Marca': equipo.marca || '',
         'Modelo': equipo.modelo || '', 'Serial': equipo.serial || '',
         'Estado': equipo.estado || '', 'Área': equipo.ubicacion || '',
         'Asignado a': equipo.asignado_a || '', 'Procesador': equipo.procesador || '',
@@ -366,13 +482,17 @@ function Equipos() {
     }
   };
 
+  // Áreas únicas de los equipos cargados
+  const areasDisponibles = [...new Set(equipos.map(e => e.ubicacion).filter(Boolean))].sort();
+
   const equiposFiltrados = equipos.filter(equipo => {
     if (empresaFiltro && equipo.empresa_id !== empresaFiltro) return false;
     if (filtroEstado && equipo.estado !== filtroEstado) return false;
+    if (filtroArea && equipo.ubicacion !== filtroArea) return false;
     if (!filtroBusqueda) return true;
     const busqueda = filtroBusqueda.toLowerCase();
-    return equipo.codigo?.toLowerCase().includes(busqueda) ||
-           equipo.nombre_equipo?.toLowerCase().includes(busqueda);
+    return equipo.nombre_equipo?.toLowerCase().includes(busqueda) ||
+           equipo.serial?.toLowerCase().includes(busqueda);
   });
 
   const totalPaginas = Math.max(1, Math.ceil(equiposFiltrados.length / itemsPorPagina));
@@ -500,10 +620,18 @@ function Equipos() {
           <option value="">Todos los estados</option>
           {estados.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
-        {(filtroBusqueda || filtroEstado) && (
+        <select
+          className="filter-select"
+          value={filtroArea}
+          onChange={e => { setFiltroArea(e.target.value); setPaginaActual(1); }}
+        >
+          <option value="">Todas las áreas</option>
+          {areasDisponibles.map(a => <option key={a} value={a}>{a}</option>)}
+        </select>
+        {(filtroBusqueda || filtroEstado || filtroArea) && (
           <button
             className="filter-clear"
-            onClick={() => { setFiltroBusqueda(''); setFiltroEstado(''); setPaginaActual(1); }}
+            onClick={() => { setFiltroBusqueda(''); setFiltroEstado(''); setFiltroArea(''); setPaginaActual(1); }}
           >
             Limpiar filtros
           </button>
@@ -566,11 +694,8 @@ function Equipos() {
                         </td>
                       )}
                       {esSuperAdmin && <td className="empresa-cell">{empresa?.nombre || '-'}</td>}
-                      <td className="equipo-cell">
-                        <span className="equipo-codigo">{e.codigo || ''}</span>
-                        {e.nombre_equipo || '-'}
-                      </td>
-                      <td>{e.tipo || '-'}</td>
+                      <td className="equipo-cell">{e.nombre_equipo || '-'}</td>
+                      <td>{e.tipo_nombre || '-'}</td>
                       <td>
                         <span className={`badge ${e.estado === 'Activo' ? 'badge-success' : e.estado === 'Asignado' ? 'badge-info' : e.estado === 'Préstamo' ? 'badge-warning' : e.estado === 'Dañado' ? 'badge-danger' : 'badge-neutral'}`}>
                           {e.estado || '-'}
@@ -640,67 +765,128 @@ function Equipos() {
               <div className="modal-body">
                 <div className="form-grid">
                   {esSuperAdmin && (
-                    <div className="form-group">
+                    <div className="form-group req">
                       <label>Empresa</label>
-                      <select value={formData.empresa_id} onChange={e => setFormData({...formData, empresa_id: e.target.value})} required>
+                      <select value={formData.empresa_id} onChange={e => setFormData({...formData, empresa_id: e.target.value, sede: ''})}>
                         <option value="">Seleccionar</option>
                         {empresas.map(emp => <option key={emp.id} value={emp.id}>{emp.nombre}</option>)}
                       </select>
                     </div>
                   )}
-                  <div className="form-group"><label>Código *</label><input type="text" value={formData.codigo} onChange={e => setFormData({...formData, codigo: e.target.value})} required /></div>
-                  <div className="form-group"><label>Nombre del equipo *</label><input type="text" value={formData.nombre_equipo} onChange={e => setFormData({...formData, nombre_equipo: e.target.value})} required /></div>
-                  <div className="form-group"><label>Tipo</label><select value={formData.tipo} onChange={e => setFormData({...formData, tipo: e.target.value})}>{tipos.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
-                  <div className="form-group"><label>Estado</label><select value={formData.estado} onChange={e => setFormData({...formData, estado: e.target.value})}>{estados.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
-                  <div className="form-group"><label>Marca</label><input type="text" value={formData.marca} onChange={e => setFormData({...formData, marca: e.target.value})} /></div>
-                  <div className="form-group"><label>Modelo</label><input type="text" value={formData.modelo} onChange={e => setFormData({...formData, modelo: e.target.value})} /></div>
-                  <div className="form-group"><label>Serial</label><input type="text" value={formData.serial} onChange={e => setFormData({...formData, serial: e.target.value})} /></div>
-                  <div className="form-group"><label>Área</label><input type="text" value={formData.ubicacion} onChange={e => setFormData({...formData, ubicacion: e.target.value})} /></div>
-                  <div className="form-group"><label>Asignado a</label><input type="text" value={formData.asignado_a} onChange={e => setFormData({...formData, asignado_a: e.target.value})} /></div>
-                  <div className="form-group"><label>Procesador</label><input type="text" value={formData.procesador} onChange={e => setFormData({...formData, procesador: e.target.value})} /></div>
-                  <div className="form-group"><label>RAM</label><input type="text" value={formData.ram} onChange={e => setFormData({...formData, ram: e.target.value})} /></div>
-                  <div className="form-group"><label>Disco Duro</label><input type="text" value={formData.disco_duro} onChange={e => setFormData({...formData, disco_duro: e.target.value})} /></div>
-                  <div className="form-group"><label>Sistema Operativo</label><input type="text" value={formData.sistema_operativo} onChange={e => setFormData({...formData, sistema_operativo: e.target.value})} /></div>
-                  <div className="form-group"><label>Garantía (meses)</label><input type="number" value={formData.garantia} onChange={e => setFormData({...formData, garantia: e.target.value})} /></div>
+                  <div className="form-group opc">
+                    <label>Sede</label>
+                    <input type="text" list="sedes-sugerencias" placeholder="Escribe o selecciona..."
+                      value={formData.sede} onChange={e => setFormData({...formData, sede: e.target.value})} />
+                    <datalist id="sedes-sugerencias">
+                      {sedes.filter(s => !formData.empresa_id || String(s.empresa_id) === String(formData.empresa_id))
+                        .map(s => <option key={s.id} value={s.nombre} />)}
+                    </datalist>
+                  </div>
+
+                  <div className="form-group req"><label>Nombre del equipo</label><input type="text" required value={formData.nombre_equipo} onChange={e => setFormData({...formData, nombre_equipo: e.target.value})} /></div>
+                  <div className="form-group opc">
+                    <label>Tipo de equipo</label>
+                    <select value={formData.tipo_id} onChange={e => setFormData({...formData, tipo_id: e.target.value})}>
+                      <option value="">Sin tipo</option>
+                      {tiposEquipo.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group req"><label>Estado</label><select value={formData.estado} onChange={e => setFormData({...formData, estado: e.target.value, prestado_a_empresa_id: e.target.value !== 'Préstamo' ? '' : formData.prestado_a_empresa_id})}>{getEstadosForm(formData.empresa_id).map(s => <option key={s} value={s}>{s}</option>)}</select></div>
+                  {formData.estado === 'Préstamo' && (
+                    <div className="form-group req">
+                      <label>Prestado a empresa</label>
+                      <select value={formData.prestado_a_empresa_id} onChange={e => setFormData({...formData, prestado_a_empresa_id: e.target.value})}>
+                        <option value="">Seleccionar empresa...</option>
+                        {empresas.filter(e => String(e.id) !== String(formData.empresa_id))
+                          .map(e => <option key={e.id} value={e.id}>{e.nombre}</option>)}
+                      </select>
+                    </div>
+                  )}
+                  <div className="form-group opc">
+                    <label>Marca</label>
+                    <input type="text" list="marcas-lista" placeholder="Escribe o selecciona..."
+                      value={formData.marca} onChange={e => setFormData({...formData, marca: e.target.value})} />
+                    <datalist id="marcas-lista">
+                      {['HP','Dell','Lenovo','Asus','Acer','Apple','Toshiba','Samsung','MSI','Huawei','LG','Sony','Epson','Ricoh','Zebra','Genérico'].map(m => (
+                        <option key={m} value={m} />
+                      ))}
+                    </datalist>
+                  </div>
+                  <div className="form-group opc"><label>Modelo</label><input type="text" value={formData.modelo} onChange={e => setFormData({...formData, modelo: e.target.value})} /></div>
+                  <div className="form-group opc"><label>Serial</label><input type="text" value={formData.serial} onChange={e => setFormData({...formData, serial: e.target.value.toUpperCase()})} style={{textTransform:'uppercase'}} /></div>
+                  <div className="form-group opc"><label>Área</label><input type="text" value={formData.ubicacion} onChange={e => setFormData({...formData, ubicacion: e.target.value})} /></div>
+                  <div className="form-group opc"><label>Asignado a</label><input type="text" value={formData.asignado_a} onChange={e => setFormData({...formData, asignado_a: e.target.value})} /></div>
+                  <div className="form-group opc"><label>Procesador</label><input type="text" value={formData.procesador} onChange={e => setFormData({...formData, procesador: e.target.value})} /></div>
+                  <div className="form-group opc"><label>RAM</label><input type="text" value={formData.ram} onChange={e => setFormData({...formData, ram: e.target.value})} /></div>
+                  <div className="form-group opc"><label>Disco Duro</label><input type="text" value={formData.disco_duro} onChange={e => setFormData({...formData, disco_duro: e.target.value})} /></div>
+                  <div className="form-group opc"><label>Sistema Operativo</label><input type="text" value={formData.sistema_operativo} onChange={e => setFormData({...formData, sistema_operativo: e.target.value})} /></div>
+                  <div className="form-group opc">
+                    <label>Garantía</label>
+                    <div style={{display:'flex', gap:'6px'}}>
+                      <input
+                        type="number" min="1"
+                        placeholder="Ej: 12"
+                        value={garantiaValor}
+                        onChange={e => setGarantiaValor(e.target.value)}
+                        style={{flex:1}}
+                      />
+                      <select
+                        value={garantiaUnidad}
+                        onChange={e => setGarantiaUnidad(e.target.value)}
+                        style={{width:'90px'}}
+                      >
+                        <option value="días">Días</option>
+                        <option value="meses">Meses</option>
+                        <option value="años">Años</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="form-group opc"><label>N° de placa</label><input type="text" placeholder="Ej: EMTRA-0042" value={formData.numero_placa} onChange={e => setFormData({...formData, numero_placa: e.target.value.toUpperCase()})} style={{textTransform:'uppercase'}} /></div>
                 </div>
 
-                {/* Dispositivos / campos adicionales */}
+                {/* Periféricos */}
                 <div className="extras-section">
                   <div className="extras-header">
-                    <span className="extras-title">Dispositivos adicionales</span>
+                    <span className="extras-title">Periféricos</span>
                     <button
                       type="button"
                       className="btn-agregar-extra"
-                      onClick={() => setCamposExtra(prev => [...prev, { valor: '' }])}
+                      onClick={() => setPerifericos(prev => [...prev, { tipo_id: '', marca: '', modelo: '', serial: '', descripcion: '' }])}
                     >
                       + Agregar
                     </button>
                   </div>
-                  {camposExtra.length === 0 && (
-                    <p className="extras-vacio">Sin dispositivos adicionales. Haz clic en "+ Agregar" para añadir.</p>
+                  {perifericos.length === 0 && (
+                    <p className="extras-vacio">Sin periféricos. Haz clic en "+ Agregar" para añadir.</p>
                   )}
-                  {camposExtra.map((campo, idx) => (
-                    <div key={idx} className="extra-row">
-                      <input
-                        className="extra-input"
-                        type="text"
-                        placeholder={`Ej: Mouse inalámbrico, Teclado, Audífonos...`}
-                        value={campo.valor}
-                        onChange={e => {
-                          const nuevos = [...camposExtra];
-                          nuevos[idx] = { valor: e.target.value };
-                          setCamposExtra(nuevos);
-                        }}
-                      />
-                      <button
-                        type="button"
-                        className="extra-btn-remove"
-                        onClick={() => setCamposExtra(prev => prev.filter((_, i) => i !== idx))}
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  ))}
+                  {perifericos.map((p, idx) => {
+                    const upd = (field, val) => {
+                      const nuevos = [...perifericos];
+                      nuevos[idx] = { ...nuevos[idx], [field]: val };
+                      setPerifericos(nuevos);
+                    };
+                    return (
+                      <div key={idx} className="periferico-card">
+                        <div className="periferico-card-top">
+                          <select
+                            className="extra-select"
+                            value={p.tipo_id || ''}
+                            onChange={e => upd('tipo_id', e.target.value)}
+                          >
+                            <option value="">Sin tipo</option>
+                            {tiposPeriferico.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
+                          </select>
+                          <button type="button" className="extra-btn-remove" onClick={() => setPerifericos(prev => prev.filter((_, i) => i !== idx))}>✕</button>
+                        </div>
+                        <div className="periferico-card-fields">
+                          <input className="extra-input" type="text" placeholder="Marca" value={p.marca || ''} onChange={e => upd('marca', e.target.value)} />
+                          <input className="extra-input" type="text" placeholder="Modelo" value={p.modelo || ''} onChange={e => upd('modelo', e.target.value)} />
+                          <input className="extra-input" type="text" placeholder="Serial" value={p.serial || ''} onChange={e => upd('serial', e.target.value.toUpperCase())} style={{textTransform:'uppercase'}} />
+                          <input className="extra-input periferico-desc" type="text" placeholder="Descripción adicional" value={p.descripcion || ''} onChange={e => upd('descripcion', e.target.value)} />
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
               <div className="modal-footer">
@@ -718,13 +904,14 @@ function Equipos() {
           <div className="modal-content" onClick={e => e.stopPropagation()}>
             <div className="modal-header"><h2>Detalles del Equipo</h2><button className="modal-close" onClick={() => setMostrarModalDetalle(false)}>✕</button></div>
             <div className="modal-body details-grid">
-              <div><strong>Código:</strong> {equipoDetalle.codigo || '-'}</div>
+
               <div><strong>Equipo:</strong> {equipoDetalle.nombre_equipo || '-'}</div>
-              <div><strong>Tipo:</strong> {equipoDetalle.tipo || '-'}</div>
+              <div><strong>Tipo:</strong> {equipoDetalle.tipo_nombre || '-'}</div>
               <div><strong>Estado:</strong> {equipoDetalle.estado || '-'}</div>
               <div><strong>Marca:</strong> {equipoDetalle.marca || '-'}</div>
               <div><strong>Modelo:</strong> {equipoDetalle.modelo || '-'}</div>
               <div><strong>Serial:</strong> {equipoDetalle.serial || '-'}</div>
+              <div><strong>N° de placa:</strong> {equipoDetalle.numero_placa || <span style={{color:'#94a3b8'}}>Sin placa</span>}</div>
               <div><strong>Área:</strong> {equipoDetalle.ubicacion || '-'}</div>
               <div><strong>Asignado a:</strong> {equipoDetalle.asignado_a || '-'}</div>
               <div><strong>Procesador:</strong> {equipoDetalle.procesador || '-'}</div>
@@ -732,6 +919,12 @@ function Equipos() {
               <div><strong>Disco Duro:</strong> {equipoDetalle.disco_duro || '-'}</div>
               <div><strong>Sistema Operativo:</strong> {equipoDetalle.sistema_operativo || '-'}</div>
               <div><strong>Empresa:</strong> {empresas.find(e => e.id === equipoDetalle.empresa_id)?.nombre || '-'}</div>
+              <div><strong>Sede:</strong> {equipoDetalle.sede || <span style={{color:'#94a3b8'}}>Sin sede</span>}</div>
+              {equipoDetalle.estado === 'Préstamo' && equipoDetalle.prestado_a_empresa_id && (
+                <div style={{gridColumn:'1/-1', background:'#fffbeb', border:'1px solid #fcd34d', borderRadius:'8px', padding:'8px 12px', fontSize:'12px', color:'#92400e'}}>
+                  <strong>Prestado a:</strong> {empresas.find(e => e.id === equipoDetalle.prestado_a_empresa_id)?.nombre || '-'}
+                </div>
+              )}
               <div style={{ gridColumn: '1 / -1' }}>
                 {(() => {
                   const g = calcularGarantia(equipoDetalle.fecha_asignacion, equipoDetalle.garantia);
@@ -769,24 +962,29 @@ function Equipos() {
                         <div style={{ textAlign: 'right' }}>
                           <p style={{ margin: 0, fontSize: '11px', color: c.color, opacity: 0.7 }}>Vence el</p>
                           <p style={{ margin: 0, fontSize: '13px', fontWeight: '600', color: c.color }}>{g.fechaFinTexto}</p>
-                          <p style={{ margin: '4px 0 0', fontSize: '11px', color: c.color, opacity: 0.7 }}>{equipoDetalle.garantia} meses de garantía</p>
+                          <p style={{ margin: '4px 0 0', fontSize: '11px', color: c.color, opacity: 0.7 }}>{formatearDias(equipoDetalle.garantia)} de garantía</p>
                         </div>
                       </div>
                     </div>
                   );
                 })()}
               </div>
-              {(() => {
-                const extras = parsearCamposExtra(equipoDetalle.especificaciones);
-                return extras.length > 0 ? (
-                  <div style={{ gridColumn: '1 / -1', borderTop: '1px solid #e2e8f0', paddingTop: '10px', marginTop: '4px' }}>
-                    <strong>Dispositivos adicionales:</strong>
-                    <ul style={{ margin: '6px 0 0', paddingLeft: '18px' }}>
-                      {extras.map((c, i) => <li key={i} style={{ fontSize: '13px', color: '#334155' }}>{c.valor}</li>)}
-                    </ul>
-                  </div>
-                ) : null;
-              })()}
+              {Array.isArray(equipoDetalle.perifericos) && equipoDetalle.perifericos.length > 0 && (
+                <div style={{ gridColumn: '1 / -1', borderTop: '1px solid #e2e8f0', paddingTop: '10px', marginTop: '4px' }}>
+                  <strong>Periféricos:</strong>
+                  <ul style={{ margin: '6px 0 0', paddingLeft: '18px' }}>
+                    {equipoDetalle.perifericos.map((p, i) => {
+                      const partes = [
+                        p.tipo_nombre,
+                        [p.marca, p.modelo].filter(Boolean).join(' '),
+                        p.serial,
+                        p.descripcion
+                      ].filter(Boolean);
+                      return <li key={i} style={{ fontSize: '13px', color: '#334155' }}>{partes.join(' — ') || '-'}</li>;
+                    })}
+                  </ul>
+                </div>
+              )}
             </div>
             <div className="modal-footer"><button className="btn-primary" onClick={() => setMostrarModalDetalle(false)}>Cerrar</button></div>
           </div>
@@ -895,14 +1093,23 @@ equiposStyles.textContent = `
   .btn-agregar-extra:hover { background: #dbeafe; }
   .extras-vacio { font-size: 11px; color: #94a3b8; text-align: center; padding: 10px 0; margin: 0; }
   .extra-row { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
-  .extra-input { flex: 1; padding: 6px 8px; border: 1px solid #d1dce6; border-radius: 6px; font-size: 12px; outline: none; }
+  .extra-input { flex: 1; padding: 6px 8px; border: 1px solid #d1dce6; border-radius: 6px; font-size: 12px; outline: none; background: #fff; }
   .extra-input:focus { border-color: #2563eb; }
+  .extra-select { padding: 6px 8px; border: 1px solid #d1dce6; border-radius: 6px; font-size: 12px; outline: none; background: #fff; min-width: 110px; }
+  .extra-select:focus { border-color: #2563eb; }
   .extra-btn-remove { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; border-radius: 6px; width: 26px; height: 26px; cursor: pointer; font-size: 11px; flex-shrink: 0; }
+  .periferico-card { border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 10px; margin-bottom: 8px; background: #f8fafc; }
+  .periferico-card-top { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
+  .periferico-card-top .extra-select { flex: 1; }
+  .periferico-card-fields { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+  .periferico-desc { grid-column: 1 / -1; }
   .modal-error { background: #fed7d7; color: #742a2a; padding: 6px 10px; margin: 0 12px 10px 12px; border-radius: 5px; font-size: 11px; }
   
   .form-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
   .form-group { margin-bottom: 0; }
   .form-group label { display: block; font-size: 10px; font-weight: 600; color: #2d3748; margin-bottom: 2px; }
+  .form-group.req label::after { content: " *"; color: #ef4444; font-weight: 700; }
+  .form-group.opc label::after { content: " (opc)"; color: #9ca3af; font-weight: 400; font-size: 9px; }
   .form-group input, .form-group select { width: 100%; padding: 4px 6px; border: 1px solid #e2e8f0; border-radius: 4px; font-size: 11px; outline: none; }
   
   .details-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }

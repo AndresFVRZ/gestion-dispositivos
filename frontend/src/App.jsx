@@ -104,6 +104,7 @@ function AppContent() {
         <Route path="/" element={<Navigate to="/dashboard" />} />
         <Route path="/dashboard" element={<VisualizadorDashboard />} />
         <Route path="/equipos" element={<Equipos />} />
+        <Route path="/sedes" element={<Sedes />} />
       </Routes>
     </Layout>
   );
@@ -148,10 +149,19 @@ appStyles.textContent = `
 
   .app-main {
     flex: 1;
-    margin-left: 260px;
+    margin-left: var(--sidebar-w, 260px);
     padding: 24px;
     background: #f1f5f9;
     min-height: 100vh;
+    transition: margin-left 0.25s ease;
+  }
+
+  @media (max-width: 768px) {
+    .app-main {
+      margin-left: 0 !important;
+      padding: 16px;
+      padding-top: 60px;
+    }
   }
 `;
 document.head.appendChild(appStyles);

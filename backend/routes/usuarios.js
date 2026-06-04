@@ -4,6 +4,8 @@ const db = require('../config/db');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const nodemailer = require('nodemailer');
+const fs = require('fs');
+const path = require('path');
 
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
@@ -32,16 +34,27 @@ const getLogoUrl = (nombreEmpresa) => {
 
 // Todos los logos para mostrar en emails y páginas
 const TODOS_LOGOS = [
-  { archivo: 'Accesalud.png',     nombre: 'Accesalud' },
-  { archivo: 'Emtra.png',         nombre: 'EMTRA' },
-  { archivo: 'EmtraSur.png',      nombre: 'EMTRASUR' },
-  { archivo: 'InprosaludPlus.png',nombre: 'Inprosalud Plus' },
-  { archivo: 'Sertti.png',        nombre: 'Sertti' },
-  { archivo: 'solucionescorp.png',nombre: 'SCI' },
-  { archivo: 'simadrid.png',      nombre: 'SI MADRID' },
+  { archivo: 'Accesalud.png',      nombre: 'Accesalud' },
+  { archivo: 'Emtra.png',          nombre: 'EMTRA' },
+  { archivo: 'EmtraSur.png',       nombre: 'EMTRASUR' },
+  { archivo: 'InprosaludPlus.png', nombre: 'Inprosalud Plus' },
+  { archivo: 'Sertti.png',         nombre: 'Sertti' },
+  { archivo: 'solucionescorp.png', nombre: 'SCI' },
+  { archivo: 'simadrid.png',       nombre: 'SI MADRID' },
 ];
 
-const BASE_URL = process.env.APP_URL_BACKEND || 'http://localhost:5000';
+const LOGOS_DIR = path.join(__dirname, '..', 'public', 'logos');
+
+// Convierte un archivo PNG a base64 data URL
+const logoBase64 = (archivo) => {
+  try {
+    const filePath = path.join(LOGOS_DIR, archivo);
+    const data = fs.readFileSync(filePath);
+    return `data:image/png;base64,${data.toString('base64')}`;
+  } catch (_) {
+    return null;
+  }
+};
 
 const logosGridHtml = () => {
   const COLS = 3;
@@ -52,10 +65,12 @@ const logosGridHtml = () => {
     const celdas = grupo.map(({ archivo, nombre }, colIdx) => {
       const esOscuro = (colIdx + row) % 2 === 0;
       const bg = esOscuro ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.06)';
+      const src = logoBase64(archivo);
+      if (!src) return '';
       return `
         <td style="padding:5px;text-align:center;vertical-align:middle;">
           <div style="background:${bg};border-radius:8px;padding:8px 6px;width:100px;height:54px;display:inline-block;text-align:center;line-height:38px;">
-            <img src="${BASE_URL}/public/logos/${archivo}" alt="${nombre}"
+            <img src="${src}" alt="${nombre}"
                  style="max-width:88px;max-height:38px;object-fit:contain;filter:brightness(0) invert(1);vertical-align:middle;" />
           </div>
         </td>
