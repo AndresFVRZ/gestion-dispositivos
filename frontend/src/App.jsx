@@ -14,6 +14,8 @@ import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import ActivarCuenta from './pages/ActivarCuenta';
 import Empresas from './pages/Empresas';
+import Sedes from './pages/Sedes';
+import Mantenimientos from './pages/Mantenimientos';
 import './index.css';
 
 function App() {
@@ -78,6 +80,8 @@ function AppContent() {
           <Route path="/empresas" element={<Empresas />} />
           <Route path="/papelera" element={<Papelera />} />
           <Route path="/historial" element={<Historial />} />
+          <Route path="/sedes" element={<Sedes />} />
+          <Route path="/mantenimientos" element={<Mantenimientos />} />
         </Routes>
       </Layout>
     );
@@ -91,6 +95,8 @@ function AppContent() {
           <Route path="/" element={<Navigate to="/dashboard" />} />
           <Route path="/dashboard" element={<GestionDashboard />} />
           <Route path="/equipos" element={<Equipos />} />
+          <Route path="/sedes" element={<Sedes />} />
+          <Route path="/mantenimientos" element={<Mantenimientos />} />
           <Route path="/historial" element={<Historial />} />
         </Routes>
       </Layout>

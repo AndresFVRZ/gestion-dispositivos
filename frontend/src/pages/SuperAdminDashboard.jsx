@@ -4,6 +4,7 @@ import { getEquiposByEmpresa, getEquipos } from '../services/equiposService';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { getLogoEmpresa } from '../utils/logos';
+import { calcularGarantia } from '../utils/garantia';
 
 function SuperAdminDashboard() {
   const { usuario } = useAuth();
@@ -55,6 +56,16 @@ function SuperAdminDashboard() {
   const asignados   = equiposFiltrados.filter(e => e.estado === 'Asignado').length;
   const disponibles = equiposFiltrados.filter(e => e.estado === 'Disponible').length;
   const manten      = equiposFiltrados.filter(e => ['Mantenimiento', 'Dañado'].includes(e.estado)).length;
+
+  const garantiasAlerta = equiposFiltrados.filter(eq => {
+    if (!eq.garantia) return false;
+    const g = calcularGarantia(eq.fecha_asignacion || eq.created_at, eq.garantia);
+    return g.tiene && (g.estado === 'critica' || g.estado === 'proxima');
+  }).sort((a, b) => {
+    const ga = calcularGarantia(a.fecha_asignacion || a.created_at, a.garantia);
+    const gb = calcularGarantia(b.fecha_asignacion || b.created_at, b.garantia);
+    return ga.diasTotales - gb.diasTotales;
+  }).slice(0, 6);
 
   const fecha = new Date().toLocaleDateString('es-CO', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
@@ -166,6 +177,34 @@ function SuperAdminDashboard() {
         </div>
       </div>
 
+
+      {/* ALERTAS DE GARANTÍA */}
+      {garantiasAlerta.length > 0 && (
+        <div className="sa-empresa-card" style={{borderLeft:'4px solid #f59e0b',marginBottom:'20px'}}>
+          <div className="sa-tabla-header" style={{paddingBottom:'12px'}}>
+            <h2 className="sa-section-title" style={{margin:0}}>⚠ Garantías próximas a vencer</h2>
+            <span style={{fontSize:'12px',color:'#64748b'}}>{garantiasAlerta.length} equipo{garantiasAlerta.length !== 1 ? 's' : ''}</span>
+          </div>
+          <div style={{display:'flex',flexDirection:'column',gap:'8px',padding:'0 20px 16px'}}>
+            {garantiasAlerta.map(eq => {
+              const g = calcularGarantia(eq.fecha_asignacion || eq.created_at, eq.garantia);
+              const critica = g.estado === 'critica';
+              return (
+                <div key={eq.id} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'10px 14px',background: critica ? '#fef2f2' : '#fffbeb',borderRadius:'8px',border:`1px solid ${critica ? '#fecaca' : '#fde68a'}`}}>
+                  <div>
+                    <span style={{fontWeight:'600',fontSize:'13px',color:'#1e293b'}}>{eq.nombre_equipo}</span>
+                    {eq.serial && <span style={{fontSize:'11px',color:'#94a3b8',marginLeft:'8px'}}>{eq.serial}</span>}
+                    {eq.empresa_nombre && <span style={{fontSize:'11px',color:'#64748b',marginLeft:'8px'}}>· {eq.empresa_nombre}</span>}
+                  </div>
+                  <span style={{fontSize:'12px',fontWeight:'600',color: critica ? '#dc2626' : '#b45309',whiteSpace:'nowrap'}}>
+                    {critica ? `Vence en ${g.diasTotales} día${g.diasTotales !== 1 ? 's' : ''}` : `~${g.dias + g.meses * 30 + g.años * 365} días restantes`}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* TABLA DE DISPOSITIVOS */}
       <div className="sa-empresa-card">

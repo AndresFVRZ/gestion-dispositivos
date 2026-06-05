@@ -4,6 +4,7 @@ import { getEmpresas } from '../services/empresasService';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { getLogoEmpresa } from '../utils/logos';
+import { calcularGarantia } from '../utils/garantia';
 
 function GestionDashboard() {
   const { usuario } = useAuth();
@@ -40,6 +41,16 @@ function GestionDashboard() {
   const otros = total - asignados - disponibles - mantenimiento - baja;
 
   const ultimos = [...lista].slice(0, 6);
+
+  const garantiasAlerta = lista.filter(eq => {
+    if (!eq.garantia) return false;
+    const g = calcularGarantia(eq.fecha_asignacion || eq.created_at, eq.garantia);
+    return g.tiene && (g.estado === 'critica' || g.estado === 'proxima');
+  }).sort((a, b) => {
+    const ga = calcularGarantia(a.fecha_asignacion || a.created_at, a.garantia);
+    const gb = calcularGarantia(b.fecha_asignacion || b.created_at, b.garantia);
+    return ga.diasTotales - gb.diasTotales;
+  }).slice(0, 5);
 
   const fecha = new Date().toLocaleDateString('es-CO', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
@@ -211,6 +222,33 @@ function GestionDashboard() {
           </div>
         </div>
       </div>
+
+      {/* ALERTAS DE GARANTÍA */}
+      {garantiasAlerta.length > 0 && (
+        <div className="gd-card" style={{borderLeft:'4px solid #f59e0b'}}>
+          <div className="gd-card-header">
+            <h2 className="gd-card-title">⚠ Garantías próximas a vencer</h2>
+            <span style={{fontSize:'12px',color:'#64748b'}}>{garantiasAlerta.length} equipo{garantiasAlerta.length !== 1 ? 's' : ''}</span>
+          </div>
+          <div style={{display:'flex',flexDirection:'column',gap:'8px',marginTop:'8px'}}>
+            {garantiasAlerta.map(eq => {
+              const g = calcularGarantia(eq.fecha_asignacion || eq.created_at, eq.garantia);
+              const critica = g.estado === 'critica';
+              return (
+                <div key={eq.id} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'10px 14px',background: critica ? '#fef2f2' : '#fffbeb',borderRadius:'8px',border:`1px solid ${critica ? '#fecaca' : '#fde68a'}`}}>
+                  <div>
+                    <span style={{fontWeight:'600',fontSize:'13px',color:'#1e293b'}}>{eq.nombre_equipo}</span>
+                    {eq.serial && <span style={{fontSize:'11px',color:'#94a3b8',marginLeft:'8px'}}>{eq.serial}</span>}
+                  </div>
+                  <span style={{fontSize:'12px',fontWeight:'600',color: critica ? '#dc2626' : '#b45309',whiteSpace:'nowrap'}}>
+                    {critica ? `Vence en ${g.diasTotales} día${g.diasTotales !== 1 ? 's' : ''}` : `${g.dias + g.meses * 30 + g.años * 365} días restantes`}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* TABLA RECIENTE */}
       <div className="gd-card">
