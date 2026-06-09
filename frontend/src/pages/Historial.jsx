@@ -44,22 +44,28 @@ function Historial() {
 
   const getColorAccion = (accion) => {
     const map = {
-      'CREAR': 'badge-success',
-      'EDITAR': 'badge-info',
-      'ELIMINAR': 'badge-warning',
-      'RESTAURAR': 'badge-info',
-      'ELIMINAR_PERMANENTE': 'badge-danger'
+      'CREAR':                 'badge-success',
+      'EDITAR':                'badge-info',
+      'ELIMINAR':              'badge-warning',
+      'RESTAURAR':             'badge-info',
+      'ELIMINAR_PERMANENTE':   'badge-danger',
+      'MANTENIMIENTO_CREAR':   'badge-mant',
+      'MANTENIMIENTO_EDITAR':  'badge-mant',
+      'MANTENIMIENTO_ELIMINAR':'badge-warning',
     };
     return map[accion] || 'badge-neutral';
   };
 
   const getNombreAccion = (accion) => {
     const map = {
-      'CREAR': 'Creación',
-      'EDITAR': 'Edición',
-      'ELIMINAR': 'Papelera',
-      'RESTAURAR': 'Restauración',
-      'ELIMINAR_PERMANENTE': 'Eliminación permanente'
+      'CREAR':                 'Creación',
+      'EDITAR':                'Edición',
+      'ELIMINAR':              'Papelera',
+      'RESTAURAR':             'Restauración',
+      'ELIMINAR_PERMANENTE':   'Eliminación permanente',
+      'MANTENIMIENTO_CREAR':   'Mantenimiento registrado',
+      'MANTENIMIENTO_EDITAR':  'Mantenimiento editado',
+      'MANTENIMIENTO_ELIMINAR':'Mantenimiento eliminado',
     };
     return map[accion] || accion;
   };
@@ -200,6 +206,9 @@ function Historial() {
               <option value="ELIMINAR">Papelera</option>
               <option value="RESTAURAR">Restauración</option>
               <option value="ELIMINAR_PERMANENTE">Eliminación permanente</option>
+              <option value="MANTENIMIENTO_CREAR">Mantenimiento registrado</option>
+              <option value="MANTENIMIENTO_EDITAR">Mantenimiento editado</option>
+              <option value="MANTENIMIENTO_ELIMINAR">Mantenimiento eliminado</option>
             </select>
           </div>
           <div>

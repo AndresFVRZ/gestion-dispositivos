@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const { registrarHistorial } = require('../utils/helpers');
 
 const TIPOS_VALIDOS = ['Preventivo', 'Correctivo', 'Actualización', 'Limpieza', 'Diagnóstico', 'Otro'];
 
@@ -27,7 +28,7 @@ const getMantenimientos = async (req, res) => {
 
         const result = await pool.query(
             `SELECT m.*,
-                    eq.nombre_equipo, eq.serial, eq.empresa_id,
+                    eq.nombre_equipo, eq.serial, eq.empresa_id, eq.codigo,
                     e.nombre AS empresa_nombre
              FROM mantenimientos m
              JOIN equipos  eq ON m.equipo_id  = eq.id
@@ -52,12 +53,41 @@ const crearMantenimiento = async (req, res) => {
         if (!TIPOS_VALIDOS.includes(tipo))
             return res.status(400).json({ success: false, message: `Tipo inválido. Opciones: ${TIPOS_VALIDOS.join(', ')}` });
 
-        const result = await pool.query(
-            `INSERT INTO mantenimientos (equipo_id, fecha_mantenimiento, tipo, descripcion, tecnico, costo, created_at)
-             VALUES ($1, $2, $3, $4, $5, $6, NOW()) RETURNING *`,
-            [equipo_id, fecha_mantenimiento, tipo, descripcion?.trim() || null, tecnico?.trim() || null, costo || null]
+        const equipoActual = await pool.query(
+            `SELECT id, codigo, nombre_equipo, empresa_id, estado FROM equipos WHERE id = $1 AND eliminado = FALSE`,
+            [equipo_id]
         );
-        res.status(201).json({ success: true, data: result.rows[0] });
+        if (equipoActual.rows.length === 0)
+            return res.status(404).json({ success: false, message: 'Equipo no encontrado' });
+
+        const equipo = equipoActual.rows[0];
+        const estadoAnterior = equipo.estado;
+
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+
+            const result = await client.query(
+                `INSERT INTO mantenimientos (equipo_id, fecha_mantenimiento, tipo, descripcion, tecnico, costo, estado_anterior, created_at)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, NOW()) RETURNING *`,
+                [equipo_id, fecha_mantenimiento, tipo, descripcion?.trim() || null, tecnico?.trim() || null, costo || null, estadoAnterior]
+            );
+
+            await client.query(`UPDATE equipos SET estado = 'Mantenimiento' WHERE id = $1`, [equipo_id]);
+
+            await client.query('COMMIT');
+
+            await registrarHistorial(pool, req, 'MANTENIMIENTO_CREAR', equipo,
+                `Mantenimiento ${tipo} registrado. Técnico: ${tecnico || 'N/A'}. Estado anterior: ${estadoAnterior}`
+            );
+
+            res.status(201).json({ success: true, data: result.rows[0] });
+        } catch (err) {
+            await client.query('ROLLBACK');
+            throw err;
+        } finally {
+            client.release();
+        }
     } catch (error) {
         console.error('Error crearMantenimiento:', error.message);
         res.status(500).json({ success: false, message: error.message });
@@ -84,6 +114,15 @@ const actualizarMantenimiento = async (req, res) => {
         if (result.rows.length === 0)
             return res.status(404).json({ success: false, message: 'Mantenimiento no encontrado' });
 
+        const equipoRes = await pool.query(
+            `SELECT id, codigo, nombre_equipo, empresa_id FROM equipos WHERE id = $1`, [equipo_id]
+        );
+        const equipo = equipoRes.rows[0];
+
+        await registrarHistorial(pool, req, 'MANTENIMIENTO_EDITAR', equipo,
+            `Mantenimiento ${tipo} actualizado. Técnico: ${tecnico || 'N/A'}`
+        );
+
         res.json({ success: true, data: result.rows[0] });
     } catch (error) {
         console.error('Error actualizarMantenimiento:', error.message);
@@ -94,9 +133,25 @@ const actualizarMantenimiento = async (req, res) => {
 const eliminarMantenimiento = async (req, res) => {
     try {
         const { id } = req.params;
+
+        const mantRes = await pool.query(
+            `SELECT m.*, eq.codigo, eq.nombre_equipo, eq.empresa_id
+             FROM mantenimientos m
+             JOIN equipos eq ON m.equipo_id = eq.id
+             WHERE m.id = $1`, [id]
+        );
+
         const result = await pool.query('DELETE FROM mantenimientos WHERE id = $1 RETURNING id', [id]);
         if (result.rows.length === 0)
             return res.status(404).json({ success: false, message: 'Mantenimiento no encontrado' });
+
+        if (mantRes.rows.length > 0) {
+            const m = mantRes.rows[0];
+            await registrarHistorial(pool, req, 'MANTENIMIENTO_ELIMINAR',
+                { id: m.equipo_id, codigo: m.codigo, nombre_equipo: m.nombre_equipo, empresa_id: m.empresa_id },
+                `Mantenimiento ${m.tipo} eliminado. Fecha: ${m.fecha_mantenimiento}`
+            );
+        }
 
         res.json({ success: true, message: 'Mantenimiento eliminado correctamente' });
     } catch (error) {

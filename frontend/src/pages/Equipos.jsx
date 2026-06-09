@@ -4,12 +4,14 @@
 import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { getEquipos, eliminarEquipo, crearEquipo, actualizarEquipo, getEquipoById, reasignarPerifericos } from '../services/equiposService';
-import { getEmpresas } from '../services/empresasService';
+import { getEmpresas, getEmpresasParaPrestamo } from '../services/empresasService';
 import { getSedes } from '../services/sedesService';
+import { getProcesos } from '../services/procesosService';
 import { getTiposEquipo, getTiposPeriferico } from '../services/tipoDispositivoService';
 import { useAuth } from '../context/AuthContext';
 import ConfirmModal from '../components/Common/ConfirmModal';
 import ImportModal from '../components/Common/ImportModal';
+import LoadingOverlay from '../components/Common/LoadingOverlay';
 import { calcularGarantia, textoGarantia, colorGarantia, aTotalDias, diasADisplay, formatearDias } from '../utils/garantia';
 import { getLogoEmpresa } from '../utils/logos';
 import * as XLSX from 'xlsx';
@@ -21,7 +23,9 @@ function Equipos() {
   const { usuario } = useAuth();
   const [equipos, setEquipos] = useState([]);
   const [empresas, setEmpresas] = useState([]);
+  const [todasEmpresas, setTodasEmpresas] = useState([]);
   const [sedes, setSedes] = useState([]);
+  const [procesos, setProcesos] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [filtroBusqueda, setFiltroBusqueda] = useState('');
   const [filtroEstado, setFiltroEstado] = useState('');
@@ -59,10 +63,10 @@ function Equipos() {
 
   const [formData, setFormData] = useState({
     nombre_equipo: '', tipo_id: '', marca: '', modelo: '',
-    serial: '', estado: 'Disponible', ubicacion: '', asignado_a: '',
+    serial: '', estado: 'Disponible', ubicacion: '', piso: '', modulo: '', asignado_a: '',
     fecha_asignacion: '', procesador: '', ram: '', disco_duro: '',
     sistema_operativo: '', garantia: '', especificaciones: '',
-    observaciones: '', empresa_id: '', numero_placa: ''
+    observaciones: '', empresa_id: '', numero_placa: '', proceso_id: ''
   });
 
   const estados = ['Disponible', 'Asignado', 'Préstamo', 'Mantenimiento', 'Dañado', 'Obsoleto', 'Baja'];
@@ -76,14 +80,16 @@ function Equipos() {
   const cargarDatos = async () => {
     try {
       setCargando(true);
-      const [empresasData, equiposData, sedesData, tiposEqData, tipsPeriData] = await Promise.all([
-        getEmpresas(), getEquipos(), getSedes(), getTiposEquipo(), getTiposPeriferico()
+      const [empresasData, equiposData, sedesData, tiposEqData, tipsPeriData, todasEmpData, procesosData] = await Promise.all([
+        getEmpresas(), getEquipos(), getSedes(), getTiposEquipo(), getTiposPeriferico(), getEmpresasParaPrestamo(), getProcesos()
       ]);
-      if (empresasData.success) setEmpresas(empresasData.data);
-      if (equiposData.success)  setEquipos(equiposData.data);
+      if (empresasData.success)  setEmpresas(empresasData.data);
+      if (todasEmpData.success)  setTodasEmpresas(todasEmpData.data);
+      if (equiposData.success)   setEquipos(equiposData.data);
       if (sedesData.success)    setSedes(sedesData.data);
       if (tiposEqData.success)  setTiposEquipo(tiposEqData.data);
       if (tipsPeriData.success) setTiposPeriferico(tipsPeriData.data);
+      if (procesosData.success) setProcesos(procesosData.data);
     } catch (error) {
       console.error('Error:', error);
     } finally {
@@ -95,10 +101,10 @@ function Equipos() {
     setEquipoEditando(null);
     setFormData({
       nombre_equipo: '', tipo_id: '', marca: '', modelo: '',
-      serial: '', estado: 'Disponible', ubicacion: '', asignado_a: '',
+      serial: '', estado: 'Disponible', ubicacion: '', piso: '', modulo: '', asignado_a: '',
       fecha_asignacion: '', procesador: '', ram: '', disco_duro: '',
       sistema_operativo: '', garantia: '', especificaciones: '',
-      observaciones: '', empresa_id: '', numero_placa: '', sede: '', prestado_a_empresa_id: ''
+      observaciones: '', empresa_id: '', numero_placa: '', sede: '', prestado_a_empresa_id: '', proceso_id: ''
     });
     setPerifericos([]);
     setGarantiaValor('');
@@ -114,13 +120,15 @@ function Equipos() {
       tipo_id: equipo.tipo_id || '', marca: equipo.marca || '',
       modelo: equipo.modelo || '', serial: equipo.serial || '',
       estado: equipo.estado || 'Disponible', ubicacion: equipo.ubicacion || '',
+      piso: equipo.piso || '', modulo: equipo.modulo || '',
       asignado_a: equipo.asignado_a || '', fecha_asignacion: equipo.fecha_asignacion || '',
       procesador: equipo.procesador || '', ram: equipo.ram || '',
       disco_duro: equipo.disco_duro || '', sistema_operativo: equipo.sistema_operativo || '',
       garantia: equipo.garantia || '', especificaciones: equipo.especificaciones || '',
       observaciones: equipo.observaciones || '',
       empresa_id: equipo.empresa_id || '', numero_placa: equipo.numero_placa || '',
-      sede: equipo.sede || '', prestado_a_empresa_id: equipo.prestado_a_empresa_id || ''
+      sede: equipo.sede || '', prestado_a_empresa_id: equipo.prestado_a_empresa_id || '',
+      proceso_id: equipo.proceso_id || ''
     });
     setPerifericos(
       (Array.isArray(equipo.perifericos) ? equipo.perifericos : []).map(p =>
@@ -390,17 +398,19 @@ function Equipos() {
             const tipoRaw = g('tipo equipo', 'tipo').toUpperCase();
             const tipoMap = {
               'LAPTOP': 'Portátil', 'PORTATIL': 'Portátil', 'PORTÁTIL': 'Portátil',
-              'SERVER': 'Computadora', 'SERVIDOR': 'Computadora',
-              'TODO EN UNO': 'Todo en uno', 'ALL IN ONE': 'Todo en uno',
               'DESKTOP': 'Desktop', 'PC': 'Desktop', 'ESCRITORIO': 'Desktop',
               'COMPUTADORA': 'Desktop', 'COMPUTADOR': 'Desktop',
+              'TABLET': 'Tablet',
+              'TODO EN UNO': 'Todo en uno', 'ALL IN ONE': 'Todo en uno',
             };
             const tipoTexto = tipoMap[tipoRaw] || '';
             const tipoEncontrado = tiposEquipo.find(t => t.nombre.toLowerCase() === tipoTexto.toLowerCase());
             const tipo_id = tipoEncontrado?.id || null;
 
-            // ubicación
+            // ubicación, piso y módulo
             const ubicacion = g('ubicacion', 'ubicación', 'area', 'área');
+            const piso      = g('piso');
+            const modulo    = g('modulo', 'módulo');
 
             // sistema operativo = SO + VERSION
             const so      = g('so', 'sistema operativo', 'sistema_operativo');
@@ -427,9 +437,14 @@ function Equipos() {
             let estado = g('estado', 'de baja') || 'Disponible';
             estado = estadoMap[estado.toUpperCase()] || 'Disponible';
 
-            // ── Periféricos (DISP 1..5) ───────────────────────────────
+            // ── Periféricos (DISP 1..N, detecta cuántos hay automáticamente) ──
+            const headers = Object.keys(row).map(k => k.toLowerCase().trim());
+            const maxDisp = headers.reduce((max, h) => {
+              const m = h.match(/^nom(?:bre)?\s+disp\s+(\d+)$/);
+              return m ? Math.max(max, parseInt(m[1])) : max;
+            }, 0) || 10;
             const perifericos = [];
-            for (let d = 1; d <= 5; d++) {
+            for (let d = 1; d <= maxDisp; d++) {
               const nom    = g(`nom disp ${d}`, `nombre disp ${d}`);
               const mod    = g(`mod disp ${d}`, `modelo disp ${d}`);
               const marka  = g(`marca disp ${d}`);
@@ -440,12 +455,14 @@ function Equipos() {
 
             const result = await crearEquipo({
               codigo, nombre_equipo, tipo_id, marca, modelo, serial,
-              estado, ubicacion, asignado_a, procesador, ram,
+              estado, ubicacion, piso: piso || null, modulo: modulo || null,
+              asignado_a, procesador, ram,
               disco_duro, sistema_operativo, garantia,
               fecha_asignacion: fecha_asignacion || null,
               numero_placa: numero_placa || null,
               empresa_id: empresaEncontrada.id,
               perifericos,
+              es_importacion: true,
             });
             if (result.success) importados++;
             else errores.push(`Fila ${i + 1} (${codigo}): ${result.message}`);
@@ -473,7 +490,8 @@ function Equipos() {
         'Código': equipo.codigo || '', 'Equipo': equipo.nombre_equipo || '',
         'Tipo': equipo.tipo_nombre || '', 'Marca': equipo.marca || '',
         'Modelo': equipo.modelo || '', 'Serial': equipo.serial || '',
-        'Estado': equipo.estado || '', 'Área': equipo.ubicacion || '',
+        'Estado': equipo.estado || '', 'Proceso': equipo.proceso_nombre || '',
+        'Piso': equipo.piso || '', 'Des. Puesto': equipo.modulo || '',
         'Asignado a': equipo.asignado_a || '', 'Procesador': equipo.procesador || '',
         'RAM': equipo.ram || '', 'Disco Duro': equipo.disco_duro || '',
         'Sistema Operativo': equipo.sistema_operativo || '', 'Garantía': equipo.garantia || '',
@@ -489,13 +507,29 @@ function Equipos() {
     }
   };
 
-  // Áreas únicas de los equipos cargados
-  const areasDisponibles = [...new Set(equipos.map(e => e.ubicacion).filter(Boolean))].sort();
+  // Procesos filtrados por empresa, sin duplicados por nombre
+  const empresaIdEfectiva = String(formData.empresa_id || (empresas.length === 1 ? empresas[0]?.id : '') || '');
+  const procesosFiltrados = [
+    ...new Map(
+      procesos
+        .filter(p => !empresaIdEfectiva || String(p.empresa_id) === empresaIdEfectiva)
+        .map(p => [p.nombre, p])
+    ).values()
+  ].sort((a, b) => a.nombre.localeCompare(b.nombre));
+
+  // Áreas únicas de los equipos cargados (desde proceso_nombre)
+  const areasDisponibles  = [...new Set(equipos.map(e => e.proceso_nombre).filter(Boolean))].sort();
+  const pisosDisponibles  = [...new Set(equipos.map(e => e.piso).filter(Boolean))].sort();
+  const modulosDisponibles = [...new Set(equipos.map(e => e.modulo).filter(Boolean))].sort();
 
   const equiposFiltrados = equipos.filter(equipo => {
-    if (empresaFiltro && equipo.empresa_id !== empresaFiltro) return false;
+    if (empresaFiltro) {
+      const perteneceAEmpresa = equipo.empresa_id === empresaFiltro;
+      const prestadoAEmpresa  = equipo.prestado_a_empresa_id === empresaFiltro;
+      if (!perteneceAEmpresa && !prestadoAEmpresa) return false;
+    }
     if (filtroEstado && equipo.estado !== filtroEstado) return false;
-    if (filtroArea && equipo.ubicacion !== filtroArea) return false;
+    if (filtroArea && equipo.proceso_nombre !== filtroArea) return false;
     if (!filtroBusqueda) return true;
     const busqueda = filtroBusqueda.toLowerCase();
     return equipo.nombre_equipo?.toLowerCase().includes(busqueda) ||
@@ -591,7 +625,7 @@ function Equipos() {
           {empresas.map(emp => {
             const logo = getLogoEmpresa(emp.nombre);
             const activa = empresaFiltro === emp.id;
-            const cnt = equipos.filter(e => e.empresa_id === emp.id).length;
+            const cnt = equipos.filter(e => e.empresa_id === emp.id || e.prestado_a_empresa_id === emp.id).length;
             return (
               <button
                 key={emp.id}
@@ -632,7 +666,7 @@ function Equipos() {
           value={filtroArea}
           onChange={e => { setFiltroArea(e.target.value); setPaginaActual(1); }}
         >
-          <option value="">Todas las áreas</option>
+          <option value="">Todos los procesos</option>
           {areasDisponibles.map(a => <option key={a} value={a}>{a}</option>)}
         </select>
         {(filtroBusqueda || filtroEstado || filtroArea) && (
@@ -666,7 +700,7 @@ function Equipos() {
                 <th>Estado</th>
                 <th>Garantía</th>
                 <th>Asignado a</th>
-                <th>Área</th>
+                <th>Proceso</th>
                 <th>Acciones</th>
               </tr>
             </thead>
@@ -707,6 +741,25 @@ function Equipos() {
                         <span className={`badge ${e.estado === 'Activo' ? 'badge-success' : e.estado === 'Asignado' ? 'badge-info' : e.estado === 'Préstamo' ? 'badge-warning' : e.estado === 'Dañado' ? 'badge-danger' : 'badge-neutral'}`}>
                           {e.estado || '-'}
                         </span>
+                        {e.estado === 'Préstamo' && e.prestado_a_empresa_id && (() => {
+                          // Si hay filtro activo, usarlo para determinar perspectiva
+                          // Si no, el dueño ve "prestado a", el receptor ve "prestado de"
+                          const viendoComoDueno = empresaFiltro
+                            ? empresaFiltro === e.empresa_id
+                            : e.prestado_a_empresa_id !== null && (
+                                usuario?.empresas?.some(emp => emp.id === e.empresa_id) ||
+                                usuario?.empresa_id === e.empresa_id
+                              );
+                          return viendoComoDueno ? (
+                            <div style={{fontSize:'10px',color:'#065f46',background:'#d1fae5',border:'1px solid #6ee7b7',borderRadius:'4px',padding:'1px 6px',marginTop:'4px',whiteSpace:'nowrap'}}>
+                              Prestado a: <strong>{e.prestado_a_nombre || '—'}</strong>
+                            </div>
+                          ) : (
+                            <div style={{fontSize:'10px',color:'#92400e',background:'#fef3c7',border:'1px solid #fde68a',borderRadius:'4px',padding:'1px 6px',marginTop:'4px',whiteSpace:'nowrap'}}>
+                              Prestado de: <strong>{e.empresa_nombre || '—'}</strong>
+                            </div>
+                          );
+                        })()}
                       </td>
                       <td>{(() => {
                         const g = calcularGarantia(e.fecha_asignacion, e.garantia);
@@ -719,7 +772,7 @@ function Equipos() {
                         );
                       })()}</td>
                       <td>{e.asignado_a || '-'}</td>
-                      <td>{e.ubicacion || '-'}</td>
+                      <td>{e.proceso_nombre || '-'}</td>
                       <td className="acciones-cell">
                         <button className="btn-view" onClick={() => verDetalleEquipo(e)}>Ver</button>
                         {puedeEditar && !modoSeleccion && <button className="btn-edit" onClick={() => abrirModalEditar(e)}>Editar</button>}
@@ -839,6 +892,8 @@ function Equipos() {
       )}
 
       {/* Modal de creación/edición */}
+      {cargandoForm && <LoadingOverlay mensaje={equipoEditando ? 'Actualizando equipo...' : 'Guardando equipo...'} />}
+
       {mostrarModal && (
         <div className="modal-overlay" onClick={() => setMostrarModal(false)}>
           <div className="modal-content modal-large" onClick={e => e.stopPropagation()}>
@@ -877,7 +932,30 @@ function Equipos() {
                       {tiposEquipo.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
                     </select>
                   </div>
-                  <div className="form-group req"><label>Estado</label><select value={formData.estado} onChange={e => setFormData({...formData, estado: e.target.value, prestado_a_empresa_id: e.target.value !== 'Préstamo' ? '' : formData.prestado_a_empresa_id})}>{getEstadosForm().map(s => <option key={s} value={s}>{s}</option>)}</select></div>
+                  <div className="form-group req">
+                    <label>Estado</label>
+                    {(() => {
+                      const enPrestamo = !!equipoEditando?.prestado_a_empresa_id;
+                      const esSA = usuario?.rol === 'super_admin';
+                      const esGestion = usuario?.rol === 'gestion';
+                      const esDueno = usuario?.empresas?.some(emp => emp.id === equipoEditando?.empresa_id) || usuario?.empresa_id === equipoEditando?.empresa_id;
+                      const bloqueado = enPrestamo && !(esSA || (esGestion && esDueno));
+                      return <>
+                        <select
+                          value={formData.estado}
+                          disabled={bloqueado}
+                          onChange={e => setFormData({...formData, estado: e.target.value, prestado_a_empresa_id: e.target.value !== 'Préstamo' ? '' : formData.prestado_a_empresa_id})}
+                        >
+                          {getEstadosForm().map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                        {bloqueado && (
+                          <span style={{fontSize:'11px',color:'#92400e',marginTop:'4px',display:'block'}}>
+                            Solo la empresa dueña puede cambiar el estado de un equipo en préstamo.
+                          </span>
+                        )}
+                      </>;
+                    })()}
+                  </div>
                   {(['Dañado', 'Mantenimiento', 'Baja'].includes(formData.estado) || formData.observaciones) && (
                     <div className="form-group req observaciones-group">
                       <label className="observaciones-label">
@@ -900,7 +978,7 @@ function Equipos() {
                       <label>Prestado a empresa</label>
                       <select value={formData.prestado_a_empresa_id} onChange={e => setFormData({...formData, prestado_a_empresa_id: e.target.value})}>
                         <option value="">Seleccionar empresa...</option>
-                        {empresas.filter(e => String(e.id) !== String(formData.empresa_id))
+                        {todasEmpresas.filter(e => String(e.id) !== String(formData.empresa_id))
                           .map(e => <option key={e.id} value={e.id}>{e.nombre}</option>)}
                       </select>
                     </div>
@@ -917,7 +995,29 @@ function Equipos() {
                   </div>
                   <div className="form-group opc"><label>Modelo</label><input type="text" value={formData.modelo} onChange={e => setFormData({...formData, modelo: e.target.value})} /></div>
                   <div className="form-group opc"><label>Serial</label><input type="text" value={formData.serial} onChange={e => setFormData({...formData, serial: e.target.value.toUpperCase()})} style={{textTransform:'uppercase'}} /></div>
-                  <div className="form-group opc"><label>Área</label><input type="text" value={formData.ubicacion} onChange={e => setFormData({...formData, ubicacion: e.target.value})} /></div>
+                  <div className="form-group opc">
+                    <label>Proceso</label>
+                    <select value={formData.proceso_id} onChange={e => setFormData({...formData, proceso_id: e.target.value})}>
+                      <option value="">Sin proceso</option>
+                      {procesosFiltrados.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group opc">
+                    <label>Piso</label>
+                    <input type="text" list="pisos-lista" placeholder="Ej: 1, 2, PB..."
+                      value={formData.piso} onChange={e => setFormData({...formData, piso: e.target.value})} />
+                    <datalist id="pisos-lista">
+                      {pisosDisponibles.map(p => <option key={p} value={p} />)}
+                    </datalist>
+                  </div>
+                  <div className="form-group opc">
+                    <label>Des. Puesto</label>
+                    <input type="text" list="modulos-lista" placeholder="Ej: A, B, 01..."
+                      value={formData.modulo} onChange={e => setFormData({...formData, modulo: e.target.value})} />
+                    <datalist id="modulos-lista">
+                      {modulosDisponibles.map(m => <option key={m} value={m} />)}
+                    </datalist>
+                  </div>
                   <div className="form-group opc"><label>Asignado a</label><input type="text" value={formData.asignado_a} onChange={e => setFormData({...formData, asignado_a: e.target.value})} /></div>
                   <div className="form-group opc"><label>Procesador</label><input type="text" value={formData.procesador} onChange={e => setFormData({...formData, procesador: e.target.value})} /></div>
                   <div className="form-group opc"><label>RAM</label><input type="text" value={formData.ram} onChange={e => setFormData({...formData, ram: e.target.value})} /></div>
@@ -1015,7 +1115,9 @@ function Equipos() {
               <div><strong>Modelo:</strong> {equipoDetalle.modelo || '-'}</div>
               <div><strong>Serial:</strong> {equipoDetalle.serial || '-'}</div>
               <div><strong>N° de placa:</strong> {equipoDetalle.numero_placa || <span style={{color:'#94a3b8'}}>Sin placa</span>}</div>
-              <div><strong>Área:</strong> {equipoDetalle.ubicacion || '-'}</div>
+              <div><strong>Proceso:</strong> {equipoDetalle.proceso_nombre || '-'}</div>
+              <div><strong>Piso:</strong> {equipoDetalle.piso || '-'}</div>
+              <div><strong>Des. Puesto:</strong> {equipoDetalle.modulo || '-'}</div>
               <div><strong>Asignado a:</strong> {equipoDetalle.asignado_a || '-'}</div>
               <div><strong>Procesador:</strong> {equipoDetalle.procesador || '-'}</div>
               <div><strong>RAM:</strong> {equipoDetalle.ram || '-'}</div>
@@ -1029,11 +1131,27 @@ function Equipos() {
               )}
               <div><strong>Empresa:</strong> {empresas.find(e => e.id === equipoDetalle.empresa_id)?.nombre || '-'}</div>
               <div><strong>Sede:</strong> {equipoDetalle.sede || <span style={{color:'#94a3b8'}}>Sin sede</span>}</div>
-              {equipoDetalle.estado === 'Préstamo' && equipoDetalle.prestado_a_empresa_id && (
-                <div style={{gridColumn:'1/-1', background:'#fffbeb', border:'1px solid #fcd34d', borderRadius:'8px', padding:'8px 12px', fontSize:'12px', color:'#92400e'}}>
-                  <strong>Prestado a:</strong> {empresas.find(e => e.id === equipoDetalle.prestado_a_empresa_id)?.nombre || '-'}
-                </div>
-              )}
+              {equipoDetalle.estado === 'Préstamo' && equipoDetalle.prestado_a_empresa_id && (() => {
+                const esOwner = empresaFiltro
+                  ? empresaFiltro === equipoDetalle.empresa_id
+                  : (usuario?.empresas?.some(emp => emp.id === equipoDetalle.empresa_id) ||
+                     usuario?.empresa_id === equipoDetalle.empresa_id);
+                return esOwner ? (
+                  <div style={{gridColumn:'1/-1',background:'#f0fdf4',border:'1px solid #86efac',borderRadius:'8px',padding:'10px 14px'}}>
+                    <p style={{margin:'0 0 2px',fontSize:'11px',fontWeight:'700',color:'#166534',textTransform:'uppercase',letterSpacing:'0.4px'}}>Equipo en préstamo</p>
+                    <p style={{margin:0,fontSize:'13px',color:'#14532d'}}>
+                      Prestado a: <strong>{equipoDetalle.prestado_a_nombre || '—'}</strong>
+                    </p>
+                  </div>
+                ) : (
+                  <div style={{gridColumn:'1/-1',background:'#fffbeb',border:'1px solid #fde68a',borderRadius:'8px',padding:'10px 14px'}}>
+                    <p style={{margin:'0 0 2px',fontSize:'11px',fontWeight:'700',color:'#92400e',textTransform:'uppercase',letterSpacing:'0.4px'}}>Equipo en préstamo</p>
+                    <p style={{margin:0,fontSize:'13px',color:'#78350f'}}>
+                      Prestado de: <strong>{equipoDetalle.empresa_nombre || '—'}</strong>
+                    </p>
+                  </div>
+                );
+              })()}
               <div style={{ gridColumn: '1 / -1' }}>
                 {(() => {
                   const g = calcularGarantia(equipoDetalle.fecha_asignacion, equipoDetalle.garantia);

@@ -27,6 +27,16 @@ router.get('/', verificarToken, async (req, res) => {
     }
 });
 
+// GET /para-prestamo — todas las empresas (para dropdown de préstamo)
+router.get('/para-prestamo', verificarToken, async (req, res) => {
+    try {
+        const result = await pool.query('SELECT id, nombre FROM empresas ORDER BY nombre');
+        res.json({ success: true, data: result.rows });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
 // GET /:id
 router.get('/:id', verificarToken, async (req, res) => {
     try {
@@ -39,6 +49,12 @@ router.get('/:id', verificarToken, async (req, res) => {
     }
 });
 
+const AREAS_DEFAULT = [
+    'BAJA', 'COMERCIAL', 'CALIDAD', 'DISPONIBLE', 'FINANCIERA SCI',
+    'GERENCIA', 'GESTION HUMANA', 'IT', 'JURIDICA', 'LOGISTICA',
+    'PLANTA', 'PRODUCCION', 'SST', 'TESORERIA', 'TX'
+];
+
 // POST / — crear empresa (solo super_admin)
 router.post('/', verificarToken, verificarRol(['super_admin']), async (req, res) => {
     try {
@@ -46,11 +62,28 @@ router.post('/', verificarToken, verificarRol(['super_admin']), async (req, res)
         if (!nombre?.trim())
             return res.status(400).json({ success: false, message: 'El nombre es requerido' });
 
-        const result = await pool.query(
-            'INSERT INTO empresas (nombre, logo) VALUES ($1, $2) RETURNING *',
-            [nombre.trim(), logo || null]
-        );
-        res.status(201).json({ success: true, data: result.rows[0] });
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+            const result = await client.query(
+                'INSERT INTO empresas (nombre, logo) VALUES ($1, $2) RETURNING *',
+                [nombre.trim(), logo || null]
+            );
+            const empresaId = result.rows[0].id;
+            for (const area of AREAS_DEFAULT) {
+                await client.query(
+                    'INSERT INTO procesos (empresa_id, nombre) VALUES ($1, $2) ON CONFLICT (empresa_id, nombre) DO NOTHING',
+                    [empresaId, area]
+                );
+            }
+            await client.query('COMMIT');
+            res.status(201).json({ success: true, data: result.rows[0] });
+        } catch (err) {
+            await client.query('ROLLBACK');
+            throw err;
+        } finally {
+            client.release();
+        }
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }

@@ -7,12 +7,15 @@ const getHistorial = async (req, res) => {
         
         let query = `
             SELECT h.*,
-                   CASE 
-                       WHEN h.accion = 'CREAR' THEN 'Creación'
-                       WHEN h.accion = 'EDITAR' THEN 'Edición'
-                       WHEN h.accion = 'ELIMINAR' THEN 'Papelera'
-                       WHEN h.accion = 'RESTAURAR' THEN 'Restauración'
-                       WHEN h.accion = 'ELIMINAR_PERMANENTE' THEN 'Eliminación permanente'
+                   CASE
+                       WHEN h.accion = 'CREAR'                  THEN 'Creación'
+                       WHEN h.accion = 'EDITAR'                 THEN 'Edición'
+                       WHEN h.accion = 'ELIMINAR'               THEN 'Papelera'
+                       WHEN h.accion = 'RESTAURAR'              THEN 'Restauración'
+                       WHEN h.accion = 'ELIMINAR_PERMANENTE'    THEN 'Eliminación permanente'
+                       WHEN h.accion = 'MANTENIMIENTO_CREAR'    THEN 'Mantenimiento registrado'
+                       WHEN h.accion = 'MANTENIMIENTO_EDITAR'   THEN 'Mantenimiento editado'
+                       WHEN h.accion = 'MANTENIMIENTO_ELIMINAR' THEN 'Mantenimiento eliminado'
                        ELSE h.accion
                    END as accion_texto
             FROM historial_acciones h

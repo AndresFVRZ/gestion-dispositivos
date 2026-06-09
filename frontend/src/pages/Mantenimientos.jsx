@@ -4,6 +4,7 @@ import { getEquipos } from '../services/equiposService';
 import { getEmpresas } from '../services/empresasService';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
+import LoadingOverlay from '../components/Common/LoadingOverlay';
 
 const TIPOS = ['Preventivo', 'Correctivo', 'Actualización', 'Limpieza', 'Diagnóstico', 'Otro'];
 const TIPO_COLOR = {
@@ -15,7 +16,7 @@ const TIPO_COLOR = {
   Otro:          { bg: '#f8fafc', color: '#475569' },
 };
 
-const VACIO = { equipo_id: '', fecha_mantenimiento: new Date().toISOString().slice(0,10), tipo: 'Preventivo', descripcion: '', tecnico: '', costo: '' };
+const VACIO = { equipo_id: '', fecha_mantenimiento: new Date().toISOString().slice(0,10), tipo: 'Preventivo', descripcion: '', tecnico: '' };
 
 function Mantenimientos() {
   const { usuario } = useAuth();
@@ -70,7 +71,6 @@ function Mantenimientos() {
       tipo:               r.tipo,
       descripcion:        r.descripcion || '',
       tecnico:            r.tecnico || '',
-      costo:              r.costo || '',
     });
     setErrorForm('');
     setModal(true);
@@ -122,10 +122,7 @@ function Mantenimientos() {
     return true;
   });
 
-  const totalCosto = listaFiltrada.reduce((s, r) => s + (parseFloat(r.costo) || 0), 0);
-
   const fmtFecha = (f) => f ? new Date(f + 'T12:00:00').toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
-  const fmtCosto = (c) => c ? `$${parseFloat(c).toLocaleString('es-CO')}` : '—';
 
   return (
     <div className="mant-page">
@@ -164,7 +161,6 @@ function Mantenimientos() {
       {listaFiltrada.length > 0 && (
         <div className="mant-resumen">
           <span>{listaFiltrada.length} registro{listaFiltrada.length !== 1 ? 's' : ''}</span>
-          {totalCosto > 0 && <span>Costo total: <strong>{fmtCosto(totalCosto)}</strong></span>}
         </div>
       )}
 
@@ -188,7 +184,6 @@ function Mantenimientos() {
                 <th>Tipo</th>
                 <th>Fecha</th>
                 <th>Técnico</th>
-                <th>Costo</th>
                 <th>Descripción</th>
                 <th style={{textAlign:'right'}}>Acciones</th>
               </tr>
@@ -208,7 +203,6 @@ function Mantenimientos() {
                     </td>
                     <td className="cell-fecha">{fmtFecha(r.fecha_mantenimiento)}</td>
                     <td className="cell-muted">{r.tecnico || '—'}</td>
-                    <td className="cell-costo">{fmtCosto(r.costo)}</td>
                     <td className="cell-desc">{r.descripcion || <span className="text-muted">—</span>}</td>
                     <td style={{textAlign:'right'}}>
                       <div className="acciones">
@@ -227,6 +221,8 @@ function Mantenimientos() {
           </table>
         </div>
       )}
+
+      {guardando && <LoadingOverlay mensaje={editando ? 'Actualizando mantenimiento...' : 'Registrando mantenimiento...'} />}
 
       {/* Modal crear/editar */}
       {modal && (
@@ -263,11 +259,6 @@ function Mantenimientos() {
                   <label>Técnico</label>
                   <input type="text" value={form.tecnico} placeholder="Nombre del técnico"
                     onChange={e => setForm({...form, tecnico: e.target.value})} />
-                </div>
-                <div className="form-group opc">
-                  <label>Costo</label>
-                  <input type="number" min="0" step="0.01" value={form.costo} placeholder="0.00"
-                    onChange={e => setForm({...form, costo: e.target.value})} />
                 </div>
                 <div className="form-group opc" style={{gridColumn:'1/-1'}}>
                   <label>Descripción</label>

@@ -64,10 +64,15 @@ const getEquipos = async (req, res) => {
 
         let query = `
             SELECT eq.*, e.nombre as empresa_nombre,
-                   td.nombre as tipo_nombre, ${PERIFERICOS_SUBQUERY}
+                   td.nombre as tipo_nombre,
+                   ep.nombre as prestado_a_nombre,
+                   pr.nombre as proceso_nombre,
+                   ${PERIFERICOS_SUBQUERY}
             FROM equipos eq
             JOIN empresas e ON eq.empresa_id = e.id
             LEFT JOIN tipo_dispositivo td ON eq.tipo_id = td.id
+            LEFT JOIN empresas ep ON eq.prestado_a_empresa_id = ep.id
+            LEFT JOIN procesos pr ON eq.proceso_id = pr.id
             WHERE eq.eliminado = FALSE
         `;
 
@@ -83,7 +88,12 @@ const getEquipos = async (req, res) => {
             }
 
             if (empresaIds.length > 0) {
-                query += ` AND eq.empresa_id = ANY($1::int[])`;
+                query += `
+                  AND (
+                    eq.empresa_id = ANY($1::int[])
+                    OR
+                    (eq.prestado_a_empresa_id IS NOT NULL AND eq.prestado_a_empresa_id = ANY($1::int[]))
+                  )`;
                 params.push(empresaIds);
             } else {
                 return res.json({ success: true, data: [] });
@@ -104,10 +114,13 @@ const getEquiposByEmpresa = async (req, res) => {
         const { empresaId } = req.params;
         const query = `
             SELECT eq.*, e.nombre as empresa_nombre,
-                   td.nombre as tipo_nombre, ${PERIFERICOS_SUBQUERY}
+                   td.nombre as tipo_nombre,
+                   pr.nombre as proceso_nombre,
+                   ${PERIFERICOS_SUBQUERY}
             FROM equipos eq
             JOIN empresas e ON eq.empresa_id = e.id
             LEFT JOIN tipo_dispositivo td ON eq.tipo_id = td.id
+            LEFT JOIN procesos pr ON eq.proceso_id = pr.id
             WHERE eq.empresa_id = $1 AND eq.eliminado = FALSE
             ORDER BY td.nombre, eq.nombre_equipo
         `;
@@ -141,14 +154,17 @@ const crearEquipo = async (req, res) => {
             garantia,
             especificaciones,
             observaciones,
+            piso,
+            modulo,
             empresa_id,
             numero_placa,
             sede,
             prestado_a_empresa_id,
+            proceso_id,
             perifericos
         } = req.body;
 
-        if (['Dañado', 'Mantenimiento', 'Baja'].includes(estado) && !observaciones?.trim())
+        if (!req.body.es_importacion && ['Dañado', 'Mantenimiento', 'Baja'].includes(estado) && !observaciones?.trim())
             return res.status(400).json({ success: false, message: `El campo Observaciones es obligatorio cuando el estado es "${estado}"` });
 
         if (tipo_id) {
@@ -168,16 +184,16 @@ const crearEquipo = async (req, res) => {
             const result = await client.query(
                 `INSERT INTO equipos
                     (codigo, nombre_equipo, tipo_id, marca, modelo, serial, estado,
-                     ubicacion, asignado_a, fecha_asignacion, procesador, ram, disco_duro,
+                     ubicacion, piso, modulo, asignado_a, fecha_asignacion, procesador, ram, disco_duro,
                      sistema_operativo, garantia, especificaciones, observaciones,
-                     empresa_id, numero_placa, sede, prestado_a_empresa_id, created_at)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, NOW())
+                     empresa_id, numero_placa, sede, prestado_a_empresa_id, proceso_id, created_at)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, NOW())
                  RETURNING *`,
                 [
                     req.body.codigo || null, nombre_equipo, tipo_id || null, marca, modelo, serial, estado,
-                    ubicacion, asignado_a, fechaAsig, procesador, ram, disco_duro,
+                    ubicacion, piso || null, modulo || null, asignado_a, fechaAsig, procesador, ram, disco_duro,
                     sistema_operativo, garantiaVal, especificaciones, observaciones || null,
-                    empresa_id, numero_placa || null, sede || null, prestado_a_empresa_id || null
+                    empresa_id, numero_placa || null, sede || null, prestado_a_empresa_id || null, proceso_id || null
                 ]
             );
             await guardarPerifericos(client, result.rows[0].id, perifericos);
@@ -219,14 +235,17 @@ const actualizarEquipo = async (req, res) => {
             garantia,
             especificaciones,
             observaciones,
+            piso,
+            modulo,
             empresa_id,
             numero_placa,
             sede,
             prestado_a_empresa_id,
+            proceso_id,
             perifericos
         } = req.body;
 
-        if (['Dañado', 'Mantenimiento', 'Baja'].includes(estado) && !observaciones?.trim())
+        if (!req.body.es_importacion && ['Dañado', 'Mantenimiento', 'Baja'].includes(estado) && !observaciones?.trim())
             return res.status(400).json({ success: false, message: `El campo Observaciones es obligatorio cuando el estado es "${estado}"` });
 
         if (tipo_id) {
@@ -246,18 +265,19 @@ const actualizarEquipo = async (req, res) => {
             const result = await client.query(
                 `UPDATE equipos SET
                     codigo = $1, nombre_equipo = $2, tipo_id = $3, marca = $4, modelo = $5,
-                    serial = $6, estado = $7, ubicacion = $8, asignado_a = $9,
-                    fecha_asignacion = $10, procesador = $11, ram = $12, disco_duro = $13,
-                    sistema_operativo = $14, garantia = $15, especificaciones = $16,
-                    observaciones = $17, empresa_id = $18, numero_placa = $19, sede = $20,
-                    prestado_a_empresa_id = $21
-                 WHERE id = $22 AND eliminado = FALSE
+                    serial = $6, estado = $7, ubicacion = $8, piso = $9, modulo = $10,
+                    asignado_a = $11, fecha_asignacion = $12, procesador = $13, ram = $14,
+                    disco_duro = $15, sistema_operativo = $16, garantia = $17,
+                    especificaciones = $18, observaciones = $19, empresa_id = $20,
+                    numero_placa = $21, sede = $22, prestado_a_empresa_id = $23, proceso_id = $24
+                 WHERE id = $25 AND eliminado = FALSE
                  RETURNING *`,
                 [
                     req.body.codigo || null, nombre_equipo, tipo_id || null, marca, modelo, serial, estado,
-                    ubicacion, asignado_a, fechaAsig, procesador, ram, disco_duro,
-                    sistema_operativo, garantiaVal, especificaciones, observaciones || null,
-                    empresa_id, numero_placa || null, sede || null, prestado_a_empresa_id || null, id
+                    ubicacion, piso || null, modulo || null, asignado_a, fechaAsig, procesador, ram,
+                    disco_duro, sistema_operativo, garantiaVal, especificaciones, observaciones || null,
+                    empresa_id, numero_placa || null, sede || null, prestado_a_empresa_id || null,
+                    proceso_id || null, id
                 ]
             );
             if (result.rows.length === 0) {
@@ -423,10 +443,13 @@ const getEquipoById = async (req, res) => {
         const { id } = req.params;
         const result = await pool.query(
             `SELECT eq.*, e.nombre as empresa_nombre,
-                    td.nombre as tipo_nombre, ${PERIFERICOS_SUBQUERY}
+                    td.nombre as tipo_nombre,
+                    pr.nombre as proceso_nombre,
+                    ${PERIFERICOS_SUBQUERY}
              FROM equipos eq
              JOIN empresas e ON eq.empresa_id = e.id
              LEFT JOIN tipo_dispositivo td ON eq.tipo_id = td.id
+             LEFT JOIN procesos pr ON eq.proceso_id = pr.id
              WHERE eq.id = $1 AND eq.eliminado = FALSE`,
             [id]
         );

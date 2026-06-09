@@ -113,12 +113,25 @@ WHERE NOT EXISTS (
 
 
 -- ============================================================
--- 7. EQUIPOS
+-- 7. PROCESOS (áreas organizacionales por empresa)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS procesos (
+    id          SERIAL PRIMARY KEY,
+    empresa_id  INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+    nombre      VARCHAR(200) NOT NULL,
+    descripcion TEXT,
+    created_at  TIMESTAMP DEFAULT NOW()
+);
+
+
+-- ============================================================
+-- 8. EQUIPOS
 -- ============================================================
 CREATE TABLE IF NOT EXISTS equipos (
     id                    SERIAL PRIMARY KEY,
     empresa_id            INTEGER REFERENCES empresas(id),
     sede_id               INTEGER REFERENCES sedes(id),
+    proceso_id            INTEGER REFERENCES procesos(id) ON DELETE SET NULL,
     asignado_usuario_id   INTEGER REFERENCES usuarios(id),
     codigo                VARCHAR(100),
     nombre_equipo         VARCHAR(200) NOT NULL,
@@ -171,6 +184,7 @@ CREATE TABLE IF NOT EXISTS mantenimientos (
     descripcion         TEXT,
     tecnico             VARCHAR(200),
     costo               NUMERIC(10, 2),
+    estado_anterior     VARCHAR(50),
     created_at          TIMESTAMP DEFAULT NOW()
 );
 
@@ -209,10 +223,12 @@ CREATE TABLE IF NOT EXISTS historial_acciones (
 -- ============================================================
 -- ÍNDICES
 -- ============================================================
-CREATE INDEX IF NOT EXISTS idx_equipos_empresa        ON equipos(empresa_id);
-CREATE INDEX IF NOT EXISTS idx_equipos_sede           ON equipos(sede_id);
-CREATE INDEX IF NOT EXISTS idx_equipos_usuario        ON equipos(asignado_usuario_id);
-CREATE INDEX IF NOT EXISTS idx_equipos_tipo           ON equipos(tipo_id);
+CREATE INDEX IF NOT EXISTS idx_procesos_empresa        ON procesos(empresa_id);
+CREATE INDEX IF NOT EXISTS idx_equipos_empresa         ON equipos(empresa_id);
+CREATE INDEX IF NOT EXISTS idx_equipos_sede            ON equipos(sede_id);
+CREATE INDEX IF NOT EXISTS idx_equipos_proceso         ON equipos(proceso_id);
+CREATE INDEX IF NOT EXISTS idx_equipos_usuario         ON equipos(asignado_usuario_id);
+CREATE INDEX IF NOT EXISTS idx_equipos_tipo            ON equipos(tipo_id);
 CREATE INDEX IF NOT EXISTS idx_perifericos_equipo     ON perifericos(equipo_id);
 CREATE INDEX IF NOT EXISTS idx_mantenimientos_equipo  ON mantenimientos(equipo_id);
 CREATE INDEX IF NOT EXISTS idx_sedes_empresa          ON sedes(empresa_id);
