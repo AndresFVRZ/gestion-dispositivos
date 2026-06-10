@@ -32,13 +32,17 @@ function GestionDashboard() {
     }
   };
 
-  const lista = empresaActiva ? equipos.filter(e => e.empresa_id === empresaActiva) : equipos;
+  // Incluye equipos propios Y prestados para la empresa activa
+  const lista = empresaActiva
+    ? equipos.filter(e => e.empresa_id === empresaActiva || e.prestado_a_empresa_id === empresaActiva)
+    : equipos;
   const total = lista.length;
-  const asignados = lista.filter(e => e.estado === 'Asignado').length;
-  const disponibles = lista.filter(e => e.estado === 'Disponible').length;
+  const asignados    = lista.filter(e => e.estado === 'Asignado').length;
+  const disponibles  = lista.filter(e => e.estado === 'Disponible').length;
+  const prestamos    = lista.filter(e => e.estado === 'Préstamo').length;
   const mantenimiento = lista.filter(e => ['Mantenimiento', 'Dañado'].includes(e.estado)).length;
-  const baja = lista.filter(e => e.estado === 'Baja').length;
-  const otros = total - asignados - disponibles - mantenimiento - baja;
+  const baja  = lista.filter(e => e.estado === 'Baja').length;
+  const otros = total - asignados - disponibles - prestamos - mantenimiento - baja;
 
   const ultimos = [...lista].slice(0, 6);
 
@@ -57,11 +61,12 @@ function GestionDashboard() {
   });
 
   const segmentos = [
-    { label: 'Asignados', count: asignados, color: '#3b82f6' },
-    { label: 'Disponibles', count: disponibles, color: '#10b981' },
-    { label: 'Mantenimiento', count: mantenimiento, color: '#f59e0b' },
-    { label: 'Baja', count: baja, color: '#94a3b8' },
-    { label: 'Otros', count: otros, color: '#e2e8f0' },
+    { label: 'Asignados',      count: asignados,     color: '#3b82f6' },
+    { label: 'Disponibles',    count: disponibles,   color: '#10b981' },
+    { label: 'En Préstamo',    count: prestamos,     color: '#eab308' },
+    { label: 'Mantenimiento',  count: mantenimiento, color: '#f59e0b' },
+    { label: 'Baja',           count: baja,          color: '#94a3b8' },
+    { label: 'Otros',          count: otros,         color: '#e2e8f0' },
   ].filter(s => s.count > 0);
 
   const estadoStyle = (estado) => {
@@ -153,6 +158,16 @@ function GestionDashboard() {
             <p className="gd-kpi-label">Disponibles</p>
             <p className="gd-kpi-value">{disponibles}</p>
             <p className="gd-kpi-pct">{total ? Math.round(disponibles / total * 100) : 0}% del total</p>
+          </div>
+        </div>
+        <div className="gd-kpi gd-kpi-yellow">
+          <div className="gd-kpi-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 7h12M8 12h12M8 17h12M4 7h.01M4 12h.01M4 17h.01"/></svg>
+          </div>
+          <div>
+            <p className="gd-kpi-label">En Préstamo</p>
+            <p className="gd-kpi-value">{prestamos}</p>
+            <p className="gd-kpi-pct">{total ? Math.round(prestamos / total * 100) : 0}% del total</p>
           </div>
         </div>
         <div className="gd-kpi gd-kpi-orange">
@@ -265,7 +280,7 @@ function GestionDashboard() {
                 <th>Tipo</th>
                 <th>Estado</th>
                 <th>Asignado a</th>
-                <th>Área</th>
+                <th>Proceso</th>
               </tr>
             </thead>
             <tbody>
@@ -283,7 +298,7 @@ function GestionDashboard() {
                         <span className="gd-badge" style={s}>{eq.estado || '-'}</span>
                       </td>
                       <td>{eq.asignado_a || '-'}</td>
-                      <td className="gd-muted">{eq.ubicacion || '-'}</td>
+                      <td className="gd-muted">{eq.proceso_nombre || '-'}</td>
                     </tr>
                   );
                 })
@@ -353,6 +368,7 @@ gdStyles.textContent = `
   .gd-kpi-blue  { border-color: #3b82f6; }
   .gd-kpi-green { border-color: #10b981; }
   .gd-kpi-purple{ border-color: #8b5cf6; }
+  .gd-kpi-yellow{ border-color: #eab308; }
   .gd-kpi-orange{ border-color: #f59e0b; }
   .gd-kpi-icon {
     width: 48px; height: 48px; border-radius: 12px; display: flex;
@@ -361,9 +377,9 @@ gdStyles.textContent = `
   .gd-kpi-icon svg { width: 22px; height: 22px; }
   .gd-kpi-blue  .gd-kpi-icon { background: #eff6ff; color: #3b82f6; }
   .gd-kpi-green .gd-kpi-icon { background: #f0fdf4; color: #10b981; }
-  .gd-kpi-purple.gd-kpi-icon { background: #f5f3ff; color: #8b5cf6; }
-  .gd-kpi-orange .gd-kpi-icon { background: #fff7ed; color: #f59e0b; }
   .gd-kpi-purple .gd-kpi-icon { background: #f5f3ff; color: #8b5cf6; }
+  .gd-kpi-yellow .gd-kpi-icon { background: #fefce8; color: #ca8a04; }
+  .gd-kpi-orange .gd-kpi-icon { background: #fff7ed; color: #f59e0b; }
   .gd-kpi-label { font-size: 12px; font-weight: 500; color: #64748b; margin: 0 0 4px 0; text-transform: uppercase; letter-spacing: 0.4px; }
   .gd-kpi-value { font-size: 32px; font-weight: 700; color: #0f172a; margin: 0 0 2px 0; line-height: 1; }
   .gd-kpi-pct   { font-size: 11px; color: #94a3b8; margin: 0; }

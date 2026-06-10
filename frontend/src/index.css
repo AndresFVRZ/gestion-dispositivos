@@ -478,6 +478,13 @@ body {
   background: white;
 }
 
+/* Mayúsculas automáticas en campos de texto (excluye fechas, números, email y contraseñas) */
+.form-group input[type="text"],
+.form-group input:not([type="date"]):not([type="number"]):not([type="email"]):not([type="password"]),
+.form-group textarea {
+  text-transform: uppercase;
+}
+
 .form-group input:focus,
 .form-group select:focus,
 .form-group textarea:focus {
@@ -512,6 +519,8 @@ body {
   border-color: var(--primary);
   box-shadow: 0 0 0 3px rgba(26, 61, 124, 0.1);
 }
+
+.filter-input { text-transform: uppercase; }
 
 /* ============================================
    PAGINACIÓN

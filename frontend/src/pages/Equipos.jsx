@@ -71,7 +71,13 @@ function Equipos() {
 
   const estados = ['Disponible', 'Asignado', 'Préstamo', 'Mantenimiento', 'Dañado', 'Obsoleto', 'Baja'];
 
-  const getEstadosForm = () => estados;
+  // Normaliza los campos de texto a mayúsculas antes de enviar al API
+  const CAMPOS_NO_UPPER = new Set(['empresa_id', 'tipo_id', 'proceso_id', 'prestado_a_empresa_id',
+    'sede', 'fecha_asignacion', 'garantia', 'estado']);
+  const normalizeFormData = (data) =>
+    Object.fromEntries(Object.entries(data).map(([k, v]) =>
+      [k, typeof v === 'string' && !CAMPOS_NO_UPPER.has(k) ? v.toUpperCase() : v]
+    ));
 
   useEffect(() => {
     cargarDatos();
@@ -162,7 +168,7 @@ function Equipos() {
 
     try {
       const payload = {
-        ...formData,
+        ...normalizeFormData(formData),
         garantia: aTotalDias(garantiaValor, garantiaUnidad),
         perifericos: perifericos.filter(p => p.tipo_id || p.marca?.trim() || p.modelo?.trim() || p.serial?.trim() || p.descripcion?.trim())
       };
@@ -946,7 +952,7 @@ function Equipos() {
                           disabled={bloqueado}
                           onChange={e => setFormData({...formData, estado: e.target.value, prestado_a_empresa_id: e.target.value !== 'Préstamo' ? '' : formData.prestado_a_empresa_id})}
                         >
-                          {getEstadosForm().map(s => <option key={s} value={s}>{s}</option>)}
+                          {estados.map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
                         {bloqueado && (
                           <span style={{fontSize:'11px',color:'#92400e',marginTop:'4px',display:'block'}}>

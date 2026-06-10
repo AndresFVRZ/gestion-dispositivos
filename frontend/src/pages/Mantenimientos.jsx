@@ -76,14 +76,21 @@ function Mantenimientos() {
     setModal(true);
   };
 
+  const CAMPOS_NO_UPPER_MANT = new Set(['equipo_id', 'fecha_mantenimiento', 'tipo']);
+  const normalizeForm = (data) =>
+    Object.fromEntries(Object.entries(data).map(([k, v]) =>
+      [k, typeof v === 'string' && !CAMPOS_NO_UPPER_MANT.has(k) ? v.toUpperCase() : v]
+    ));
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setGuardando(true);
     setErrorForm('');
     try {
+      const payload = normalizeForm(form);
       const r = editando
-        ? await actualizarMantenimiento(editando.id, form)
-        : await crearMantenimiento(form);
+        ? await actualizarMantenimiento(editando.id, payload)
+        : await crearMantenimiento(payload);
       if (r.success) {
         toast.success(editando ? 'Mantenimiento actualizado' : 'Mantenimiento registrado');
         setModal(false);

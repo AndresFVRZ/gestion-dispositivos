@@ -24,24 +24,28 @@ function VisualizadorDashboard() {
     }
   };
 
-  const total = equipos.length;
-  const asignados = equipos.filter(e => e.estado === 'Asignado').length;
-  const disponibles = equipos.filter(e => e.estado === 'Disponible').length;
+  const total        = equipos.length;
+  const asignados    = equipos.filter(e => e.estado === 'Asignado').length;
+  const disponibles  = equipos.filter(e => e.estado === 'Disponible').length;
+  const prestamos    = equipos.filter(e => e.estado === 'Préstamo').length;
   const mantenimiento = equipos.filter(e => ['Mantenimiento', 'Dañado'].includes(e.estado)).length;
 
   const segmentos = [
-    { label: 'Asignados', count: asignados, color: '#3b82f6' },
-    { label: 'Disponibles', count: disponibles, color: '#10b981' },
+    { label: 'Asignados',     count: asignados,     color: '#3b82f6' },
+    { label: 'Disponibles',   count: disponibles,   color: '#10b981' },
+    { label: 'En Préstamo',   count: prestamos,     color: '#eab308' },
     { label: 'Mantenimiento', count: mantenimiento, color: '#f59e0b' },
-    { label: 'Otros', count: total - asignados - disponibles - mantenimiento, color: '#e2e8f0' },
+    { label: 'Otros', count: total - asignados - disponibles - prestamos - mantenimiento, color: '#e2e8f0' },
   ].filter(s => s.count > 0);
 
-  const equiposFiltrados = equipos.filter(e =>
-    !filtro ||
-    e.nombre_equipo?.toLowerCase().includes(filtro.toLowerCase()) ||
-    e.codigo?.toLowerCase().includes(filtro.toLowerCase()) ||
-    e.asignado_a?.toLowerCase().includes(filtro.toLowerCase())
-  );
+  const equiposFiltrados = equipos.filter(e => {
+    if (!filtro) return true;
+    const q = filtro.toUpperCase();
+    return e.nombre_equipo?.toUpperCase().includes(q) ||
+           e.codigo?.toUpperCase().includes(q) ||
+           e.asignado_a?.toUpperCase().includes(q) ||
+           e.proceso_nombre?.toUpperCase().includes(q);
+  });
 
   const fecha = new Date().toLocaleDateString('es-CO', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
@@ -103,6 +107,16 @@ function VisualizadorDashboard() {
             <p className="vd-kpi-label">Disponibles</p>
             <p className="vd-kpi-value">{disponibles}</p>
             <p className="vd-kpi-pct">{total ? Math.round(disponibles / total * 100) : 0}% del total</p>
+          </div>
+        </div>
+        <div className="vd-kpi vd-kpi-yellow">
+          <div className="vd-kpi-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 7h12M8 12h12M8 17h12M4 7h.01M4 12h.01M4 17h.01"/></svg>
+          </div>
+          <div>
+            <p className="vd-kpi-label">En Préstamo</p>
+            <p className="vd-kpi-value">{prestamos}</p>
+            <p className="vd-kpi-pct">{total ? Math.round(prestamos / total * 100) : 0}% del total</p>
           </div>
         </div>
         <div className="vd-kpi vd-kpi-orange">
@@ -234,6 +248,7 @@ vdStyles.textContent = `
   .vd-kpi-blue   { border-color: #3b82f6; }
   .vd-kpi-green  { border-color: #10b981; }
   .vd-kpi-purple { border-color: #8b5cf6; }
+  .vd-kpi-yellow { border-color: #eab308; }
   .vd-kpi-orange { border-color: #f59e0b; }
   .vd-kpi-icon {
     width: 48px; height: 48px; border-radius: 12px; display: flex;
@@ -243,6 +258,7 @@ vdStyles.textContent = `
   .vd-kpi-blue   .vd-kpi-icon { background: #eff6ff; color: #3b82f6; }
   .vd-kpi-green  .vd-kpi-icon { background: #f0fdf4; color: #10b981; }
   .vd-kpi-purple .vd-kpi-icon { background: #f5f3ff; color: #8b5cf6; }
+  .vd-kpi-yellow .vd-kpi-icon { background: #fefce8; color: #ca8a04; }
   .vd-kpi-orange .vd-kpi-icon { background: #fff7ed; color: #f59e0b; }
   .vd-kpi-label { font-size: 12px; font-weight: 500; color: #64748b; margin: 0 0 4px 0; text-transform: uppercase; letter-spacing: 0.4px; }
   .vd-kpi-value { font-size: 32px; font-weight: 700; color: #0f172a; margin: 0 0 2px 0; line-height: 1; }

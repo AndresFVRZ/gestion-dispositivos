@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getEmpresas } from '../services/empresasService';
-import { getEquiposByEmpresa, getEquipos } from '../services/equiposService';
+import { getEquipos } from '../services/equiposService';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { getLogoEmpresa } from '../utils/logos';
@@ -10,7 +10,6 @@ function SuperAdminDashboard() {
   const { usuario } = useAuth();
   const navigate = useNavigate();
   const [empresas, setEmpresas] = useState([]);
-  const [equiposPorEmpresa, setEquiposPorEmpresa] = useState({});
   const [todosEquipos, setTodosEquipos] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [empresaAbierta, setEmpresaAbierta] = useState(null);
@@ -29,15 +28,6 @@ function SuperAdminDashboard() {
       if (empresasData.success) {
         setEmpresas(empresasData.data);
         if (empresasData.data.length > 0) setEmpresaAbierta(empresasData.data[0].id);
-
-        const mapa = {};
-        await Promise.all(
-          empresasData.data.map(async (emp) => {
-            const eq = await getEquiposByEmpresa(emp.id);
-            if (eq.success) mapa[emp.id] = eq.data;
-          })
-        );
-        setEquiposPorEmpresa(mapa);
       }
       if (todosData.success) setTodosEquipos(todosData.data);
     } catch (error) {
@@ -47,14 +37,15 @@ function SuperAdminDashboard() {
     }
   };
 
-  // Equipos filtrados según empresa activa
+  // Equipos filtrados: incluye propios Y prestados para la empresa activa
   const equiposFiltrados = empresaActiva
-    ? (equiposPorEmpresa[empresaActiva] || [])
+    ? todosEquipos.filter(e => e.empresa_id === empresaActiva || e.prestado_a_empresa_id === empresaActiva)
     : todosEquipos;
 
   const total       = equiposFiltrados.length;
   const asignados   = equiposFiltrados.filter(e => e.estado === 'Asignado').length;
   const disponibles = equiposFiltrados.filter(e => e.estado === 'Disponible').length;
+  const prestamos   = equiposFiltrados.filter(e => e.estado === 'Préstamo').length;
   const manten      = equiposFiltrados.filter(e => ['Mantenimiento', 'Dañado'].includes(e.estado)).length;
 
   const garantiasAlerta = equiposFiltrados.filter(eq => {
@@ -163,6 +154,16 @@ function SuperAdminDashboard() {
             <p className="sa-kpi-label">Disponibles</p>
             <p className="sa-kpi-value">{disponibles}</p>
             <p className="sa-kpi-pct">{total ? Math.round(disponibles/total*100) : 0}%</p>
+          </div>
+        </div>
+        <div className="sa-kpi sa-kpi-yellow">
+          <div className="sa-kpi-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 7h12M8 12h12M8 17h12M4 7h.01M4 12h.01M4 17h.01"/></svg>
+          </div>
+          <div>
+            <p className="sa-kpi-label">En Préstamo</p>
+            <p className="sa-kpi-value">{prestamos}</p>
+            <p className="sa-kpi-pct">{total ? Math.round(prestamos/total*100) : 0}%</p>
           </div>
         </div>
         <div className="sa-kpi sa-kpi-orange">
@@ -322,6 +323,7 @@ saStyles.textContent = `
   .sa-kpi-indigo { border-color: #6366f1; }
   .sa-kpi-green  { border-color: #10b981; }
   .sa-kpi-teal   { border-color: #06b6d4; }
+  .sa-kpi-yellow { border-color: #eab308; }
   .sa-kpi-orange { border-color: #f59e0b; }
   .sa-kpi-icon {
     width: 36px; height: 36px; border-radius: 9px; display: flex;
@@ -332,6 +334,7 @@ saStyles.textContent = `
   .sa-kpi-indigo .sa-kpi-icon { background: #eef2ff; color: #6366f1; }
   .sa-kpi-green  .sa-kpi-icon { background: #f0fdf4; color: #10b981; }
   .sa-kpi-teal   .sa-kpi-icon { background: #ecfeff; color: #06b6d4; }
+  .sa-kpi-yellow .sa-kpi-icon { background: #fefce8; color: #ca8a04; }
   .sa-kpi-orange .sa-kpi-icon { background: #fff7ed; color: #f59e0b; }
   .sa-kpi-label { font-size: 10px; font-weight: 500; color: #64748b; margin: 0 0 2px 0; text-transform: uppercase; letter-spacing: 0.4px; }
   .sa-kpi-value { font-size: 22px; font-weight: 700; color: #0f172a; margin: 0; line-height: 1; }
