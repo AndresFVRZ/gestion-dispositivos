@@ -192,6 +192,9 @@ router.post('/', async (req, res) => {
 
     const userId = result.rows[0].id;
 
+    if (rolNombre === 'visualizador' && empresas_ids && empresas_ids.length > 1)
+      return res.status(400).json({ success: false, message: 'El rol Visualizador solo puede tener una empresa asignada' });
+
     if (empresas_ids && empresas_ids.length > 0 && rolNombre !== 'super_admin') {
       for (const empresaId of empresas_ids) {
         await db.query(
@@ -267,6 +270,9 @@ router.put('/:id', async (req, res) => {
     }
 
     if (empresas_ids !== undefined) {
+      if (rolNombre === 'visualizador' && empresas_ids.length > 1)
+        return res.status(400).json({ success: false, message: 'El rol Visualizador solo puede tener una empresa asignada' });
+
       await db.query('DELETE FROM usuario_empresas WHERE usuario_id = $1', [id]);
       if (rolNombre !== 'super_admin' && empresas_ids.length > 0) {
         for (const empresaId of empresas_ids) {

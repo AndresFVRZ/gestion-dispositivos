@@ -52,7 +52,9 @@ function Equipos() {
   const [importModal, setImportModal] = useState({ estado: 'idle', progreso: 0, total: 0, importados: 0, errores: [] });
   const [tiposEquipo, setTiposEquipo] = useState([]);
   const [tiposPeriferico, setTiposPeriferico] = useState([]);
-  const [modalReasignar, setModalReasignar] = useState(null); // { equipoId, equipoNombre, perifericos, empresaId }
+  const [modalReasignar, setModalReasignar] = useState(null);
+  const [busquedaSede, setBusquedaSede]         = useState('');
+  const [showDropdownSede, setShowDropdownSede] = useState(false); // { equipoId, equipoNombre, perifericos, empresaId }
   const [reasignarDestino, setReasignarDestino] = useState('');
   const [reasignarSel, setReasignarSel] = useState([]);
   const [cargandoReasignar, setCargandoReasignar] = useState(false);
@@ -115,6 +117,7 @@ function Equipos() {
     setPerifericos([]);
     setGarantiaValor('');
     setGarantiaUnidad('meses');
+    setBusquedaSede('');
     setErrorForm('');
     setMostrarModal(true);
   };
@@ -136,6 +139,7 @@ function Equipos() {
       sede: equipo.sede || '', prestado_a_empresa_id: equipo.prestado_a_empresa_id || '',
       proceso_id: equipo.proceso_id || ''
     });
+    setBusquedaSede(equipo.sede || '');
     setPerifericos(
       (Array.isArray(equipo.perifericos) ? equipo.perifericos : []).map(p =>
         typeof p === 'string'
@@ -459,7 +463,7 @@ function Equipos() {
               if (parts.length) perifericos.push({ tipo_id: null, descripcion: parts.join(' - ') });
             }
 
-            const result = await crearEquipo({
+            const result = await crearEquipo(normalizeFormData({
               codigo, nombre_equipo, tipo_id, marca, modelo, serial,
               estado, ubicacion, piso: piso || null, modulo: modulo || null,
               asignado_a, procesador, ram,
@@ -469,7 +473,7 @@ function Equipos() {
               empresa_id: empresaEncontrada.id,
               perifericos,
               es_importacion: true,
-            });
+            }));
             if (result.success) importados++;
             else errores.push(`Fila ${i + 1} (${codigo}): ${result.message}`);
           } catch (err) {
@@ -513,6 +517,14 @@ function Equipos() {
     }
   };
 
+  // Cascada Empresa → Sede → Proceso
+  const empresaSeleccionada = formData.empresa_id || (empresas.length === 1 ? String(empresas[0]?.id) : '');
+  const sedeHabilitada      = !!empresaSeleccionada;
+  const procesoHabilitado   = sedeHabilitada && !!formData.sede?.trim();
+  const sedesCombo = sedes
+    .filter(s => empresaSeleccionada && String(s.empresa_id) === String(empresaSeleccionada))
+    .filter(s => !busquedaSede || s.nombre.toUpperCase().includes(busquedaSede.toUpperCase()));
+
   // Procesos filtrados por empresa, sin duplicados por nombre
   const empresaIdEfectiva = String(formData.empresa_id || (empresas.length === 1 ? empresas[0]?.id : '') || '');
   const procesosFiltrados = [
@@ -523,8 +535,10 @@ function Equipos() {
     ).values()
   ].sort((a, b) => a.nombre.localeCompare(b.nombre));
 
-  // Áreas únicas de los equipos cargados (desde proceso_nombre)
-  const areasDisponibles  = [...new Set(equipos.map(e => e.proceso_nombre).filter(Boolean))].sort();
+  // Procesos disponibles para el filtro (desde lista de procesos, filtrados por empresa activa)
+  const procesosParaFiltro = empresaFiltro
+    ? procesos.filter(p => p.empresa_id === empresaFiltro)
+    : procesos.filter((p, i, arr) => arr.findIndex(x => x.nombre === p.nombre) === i);
   const pisosDisponibles  = [...new Set(equipos.map(e => e.piso).filter(Boolean))].sort();
   const modulosDisponibles = [...new Set(equipos.map(e => e.modulo).filter(Boolean))].sort();
 
@@ -535,7 +549,7 @@ function Equipos() {
       if (!perteneceAEmpresa && !prestadoAEmpresa) return false;
     }
     if (filtroEstado && equipo.estado !== filtroEstado) return false;
-    if (filtroArea && equipo.proceso_nombre !== filtroArea) return false;
+    if (filtroArea && String(equipo.proceso_id) !== String(filtroArea)) return false;
     if (!filtroBusqueda) return true;
     const busqueda = filtroBusqueda.toLowerCase();
     return equipo.nombre_equipo?.toLowerCase().includes(busqueda) ||
@@ -673,7 +687,9 @@ function Equipos() {
           onChange={e => { setFiltroArea(e.target.value); setPaginaActual(1); }}
         >
           <option value="">Todos los procesos</option>
-          {areasDisponibles.map(a => <option key={a} value={a}>{a}</option>)}
+          {procesosParaFiltro
+            .sort((a, b) => a.nombre.localeCompare(b.nombre))
+            .map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
         </select>
         {(filtroBusqueda || filtroEstado || filtroArea) && (
           <button
@@ -914,7 +930,7 @@ function Equipos() {
                   {esSuperAdmin && (
                     <div className="form-group req">
                       <label>Empresa</label>
-                      <select value={formData.empresa_id} onChange={e => setFormData({...formData, empresa_id: e.target.value, sede: ''})}>
+                      <select value={formData.empresa_id} onChange={e => setFormData({...formData, empresa_id: e.target.value, sede: '', proceso_id: ''})}>
                         <option value="">Seleccionar</option>
                         {empresas.map(emp => <option key={emp.id} value={emp.id}>{emp.nombre}</option>)}
                       </select>
@@ -922,12 +938,44 @@ function Equipos() {
                   )}
                   <div className="form-group opc">
                     <label>Sede</label>
-                    <input type="text" list="sedes-sugerencias" placeholder="Escribe o selecciona..."
-                      value={formData.sede} onChange={e => setFormData({...formData, sede: e.target.value})} />
-                    <datalist id="sedes-sugerencias">
-                      {sedes.filter(s => !formData.empresa_id || String(s.empresa_id) === String(formData.empresa_id))
-                        .map(s => <option key={s.id} value={s.nombre} />)}
-                    </datalist>
+                    <div style={{ position: 'relative' }}>
+                      <input
+                        type="text"
+                        autoComplete="off"
+                        placeholder={sedeHabilitada ? 'Buscar sede...' : 'Selecciona una empresa primero'}
+                        disabled={!sedeHabilitada}
+                        value={busquedaSede}
+                        onChange={e => {
+                          setBusquedaSede(e.target.value);
+                          setFormData(prev => ({...prev, sede: e.target.value, proceso_id: e.target.value.trim() ? prev.proceso_id : ''}));
+                          setShowDropdownSede(true);
+                        }}
+                        onFocus={() => setShowDropdownSede(true)}
+                        onBlur={() => setTimeout(() => setShowDropdownSede(false), 200)}
+                        style={{ width: '100%', padding: '8px 10px', border: '1px solid #d1dce6', borderRadius: '6px', fontSize: '13px', outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box', opacity: sedeHabilitada ? 1 : 0.45, cursor: sedeHabilitada ? 'text' : 'not-allowed', background: sedeHabilitada ? 'white' : '#f8fafc' }}
+                      />
+                      {showDropdownSede && (
+                        <div style={{ position: 'absolute', top: 'calc(100% + 2px)', left: 0, right: 0, background: 'white', border: '1px solid #d1dce6', borderRadius: '8px', maxHeight: '200px', overflowY: 'auto', zIndex: 9999, boxShadow: '0 6px 20px rgba(0,0,0,0.15)' }}>
+                          {sedesCombo.length === 0 ? (
+                            <div style={{ padding: '10px 14px', color: '#94a3b8', fontSize: '13px', textAlign: 'center' }}>Sin sedes disponibles</div>
+                          ) : sedesCombo.map(s => (
+                            <div
+                              key={s.id}
+                              onMouseDown={() => {
+                                setBusquedaSede(s.nombre);
+                                setFormData(prev => ({...prev, sede: s.nombre}));
+                                setShowDropdownSede(false);
+                              }}
+                              style={{ padding: '9px 14px', cursor: 'pointer', fontSize: '13px', borderBottom: '1px solid #f1f5f9', fontWeight: 500, color: '#1e293b' }}
+                              onMouseEnter={e => e.currentTarget.style.background = '#f0f7ff'}
+                              onMouseLeave={e => e.currentTarget.style.background = 'white'}
+                            >
+                              {s.nombre}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   <div className="form-group req"><label>Nombre del equipo</label><input type="text" required value={formData.nombre_equipo} onChange={e => setFormData({...formData, nombre_equipo: e.target.value})} /></div>
@@ -1003,8 +1051,13 @@ function Equipos() {
                   <div className="form-group opc"><label>Serial</label><input type="text" value={formData.serial} onChange={e => setFormData({...formData, serial: e.target.value.toUpperCase()})} style={{textTransform:'uppercase'}} /></div>
                   <div className="form-group opc">
                     <label>Proceso</label>
-                    <select value={formData.proceso_id} onChange={e => setFormData({...formData, proceso_id: e.target.value})}>
-                      <option value="">Sin proceso</option>
+                    <select
+                      disabled={!procesoHabilitado}
+                      value={formData.proceso_id}
+                      onChange={e => setFormData({...formData, proceso_id: e.target.value})}
+                      style={!procesoHabilitado ? {opacity:0.45, cursor:'not-allowed', background:'#f8fafc'} : {}}
+                    >
+                      <option value="">{procesoHabilitado ? 'Sin proceso' : 'Completa la sede primero'}</option>
                       {procesosFiltrados.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
                     </select>
                   </div>

@@ -48,7 +48,7 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('usuario');
     setToken(null);
     setUsuario(null);
-    window.location.href = '/';
+    window.location.replace('/');
   };
 
   const tienePermiso = (rolesPermitidos) => {

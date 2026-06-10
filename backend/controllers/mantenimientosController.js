@@ -160,4 +160,141 @@ const eliminarMantenimiento = async (req, res) => {
     }
 };
 
-module.exports = { getMantenimientos, crearMantenimiento, actualizarMantenimiento, eliminarMantenimiento };
+const completarMantenimiento = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { notas_completado } = req.body;
+
+        const mantRes = await pool.query(
+            `SELECT m.*, eq.codigo, eq.nombre_equipo, eq.empresa_id
+             FROM mantenimientos m
+             JOIN equipos eq ON m.equipo_id = eq.id
+             WHERE m.id = $1`, [id]
+        );
+        if (mantRes.rows.length === 0)
+            return res.status(404).json({ success: false, message: 'Mantenimiento no encontrado' });
+
+        const mant = mantRes.rows[0];
+        if (mant.estado_mant !== 'activo')
+            return res.status(400).json({ success: false, message: 'Solo se puede completar un mantenimiento activo' });
+
+        const result = await pool.query(
+            `UPDATE mantenimientos
+             SET estado_mant = 'completado', fecha_completado = NOW(), notas_completado = $1
+             WHERE id = $2 RETURNING *`,
+            [notas_completado?.trim() || null, id]
+        );
+
+        await registrarHistorial(pool, req, 'MANTENIMIENTO_COMPLETAR',
+            { id: mant.equipo_id, codigo: mant.codigo, nombre_equipo: mant.nombre_equipo, empresa_id: mant.empresa_id },
+            `Mantenimiento marcado como completado. ${notas_completado ? 'Notas: ' + notas_completado : ''}`
+        );
+
+        res.json({ success: true, data: result.rows[0], message: 'Mantenimiento marcado como completado' });
+    } catch (error) {
+        console.error('Error completarMantenimiento:', error.message);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+const aprobarMantenimiento = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { notas_aprobacion } = req.body;
+        const usuarioId = req.usuario.id;
+
+        const mantRes = await pool.query(
+            `SELECT m.*, eq.codigo, eq.nombre_equipo, eq.empresa_id
+             FROM mantenimientos m
+             JOIN equipos eq ON m.equipo_id = eq.id
+             WHERE m.id = $1`, [id]
+        );
+        if (mantRes.rows.length === 0)
+            return res.status(404).json({ success: false, message: 'Mantenimiento no encontrado' });
+
+        const mant = mantRes.rows[0];
+        if (mant.estado_mant !== 'completado')
+            return res.status(400).json({ success: false, message: 'Solo se puede aprobar un mantenimiento completado' });
+
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+
+            const result = await client.query(
+                `UPDATE mantenimientos
+                 SET estado_mant = 'aprobado', fecha_aprobacion = NOW(),
+                     notas_aprobacion = $1, aprobado_por = $2
+                 WHERE id = $3 RETURNING *`,
+                [notas_aprobacion?.trim() || null, usuarioId, id]
+            );
+
+            // Restaurar estado anterior del equipo
+            const estadoRestaurar = mant.estado_anterior || 'Disponible';
+            await client.query(
+                `UPDATE equipos SET estado = $1 WHERE id = $2`,
+                [estadoRestaurar, mant.equipo_id]
+            );
+
+            await client.query('COMMIT');
+
+            await registrarHistorial(pool, req, 'MANTENIMIENTO_APROBAR',
+                { id: mant.equipo_id, codigo: mant.codigo, nombre_equipo: mant.nombre_equipo, empresa_id: mant.empresa_id },
+                `Mantenimiento aprobado. Equipo restaurado a estado: ${estadoRestaurar}`
+            );
+
+            res.json({ success: true, data: result.rows[0], message: `Mantenimiento aprobado. Equipo restaurado a "${estadoRestaurar}"` });
+        } catch (err) {
+            await client.query('ROLLBACK');
+            throw err;
+        } finally {
+            client.release();
+        }
+    } catch (error) {
+        console.error('Error aprobarMantenimiento:', error.message);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+const rechazarMantenimiento = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { notas_aprobacion } = req.body;
+        const usuarioId = req.usuario.id;
+
+        const mantRes = await pool.query(
+            `SELECT m.*, eq.codigo, eq.nombre_equipo, eq.empresa_id
+             FROM mantenimientos m
+             JOIN equipos eq ON m.equipo_id = eq.id
+             WHERE m.id = $1`, [id]
+        );
+        if (mantRes.rows.length === 0)
+            return res.status(404).json({ success: false, message: 'Mantenimiento no encontrado' });
+
+        const mant = mantRes.rows[0];
+        if (mant.estado_mant !== 'completado')
+            return res.status(400).json({ success: false, message: 'Solo se puede rechazar un mantenimiento completado' });
+
+        const result = await pool.query(
+            `UPDATE mantenimientos
+             SET estado_mant = 'rechazado', fecha_aprobacion = NOW(),
+                 notas_aprobacion = $1, aprobado_por = $2
+             WHERE id = $3 RETURNING *`,
+            [notas_aprobacion?.trim() || null, usuarioId, id]
+        );
+
+        await registrarHistorial(pool, req, 'MANTENIMIENTO_RECHAZAR',
+            { id: mant.equipo_id, codigo: mant.codigo, nombre_equipo: mant.nombre_equipo, empresa_id: mant.empresa_id },
+            `Mantenimiento rechazado. Equipo permanece en estado Mantenimiento. ${notas_aprobacion ? 'Razón: ' + notas_aprobacion : ''}`
+        );
+
+        res.json({ success: true, data: result.rows[0], message: 'Mantenimiento rechazado. El equipo permanece en estado Mantenimiento' });
+    } catch (error) {
+        console.error('Error rechazarMantenimiento:', error.message);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+module.exports = {
+    getMantenimientos, crearMantenimiento, actualizarMantenimiento, eliminarMantenimiento,
+    completarMantenimiento, aprobarMantenimiento, rechazarMantenimiento
+};

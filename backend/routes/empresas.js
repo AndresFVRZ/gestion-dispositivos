@@ -49,12 +49,6 @@ router.get('/:id', verificarToken, async (req, res) => {
     }
 });
 
-const AREAS_DEFAULT = [
-    'BAJA', 'COMERCIAL', 'CALIDAD', 'DISPONIBLE', 'FINANCIERA SCI',
-    'GERENCIA', 'GESTION HUMANA', 'IT', 'JURIDICA', 'LOGISTICA',
-    'PLANTA', 'PRODUCCION', 'SST', 'TESORERIA', 'TX'
-];
-
 // POST / — crear empresa (solo super_admin)
 router.post('/', verificarToken, verificarRol(['super_admin']), async (req, res) => {
     try {
@@ -62,28 +56,11 @@ router.post('/', verificarToken, verificarRol(['super_admin']), async (req, res)
         if (!nombre?.trim())
             return res.status(400).json({ success: false, message: 'El nombre es requerido' });
 
-        const client = await pool.connect();
-        try {
-            await client.query('BEGIN');
-            const result = await client.query(
-                'INSERT INTO empresas (nombre, logo) VALUES ($1, $2) RETURNING *',
-                [nombre.trim(), logo || null]
-            );
-            const empresaId = result.rows[0].id;
-            for (const area of AREAS_DEFAULT) {
-                await client.query(
-                    'INSERT INTO procesos (empresa_id, nombre) VALUES ($1, $2) ON CONFLICT (empresa_id, nombre) DO NOTHING',
-                    [empresaId, area]
-                );
-            }
-            await client.query('COMMIT');
-            res.status(201).json({ success: true, data: result.rows[0] });
-        } catch (err) {
-            await client.query('ROLLBACK');
-            throw err;
-        } finally {
-            client.release();
-        }
+        const result = await pool.query(
+            'INSERT INTO empresas (nombre, logo) VALUES ($1, $2) RETURNING *',
+            [nombre.trim(), logo || null]
+        );
+        res.status(201).json({ success: true, data: result.rows[0] });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }

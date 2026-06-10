@@ -143,14 +143,18 @@ function Usuarios() {
   };
 
   const handleEmpresaChange = (e) => {
-    const value = e.target.value;
+    const value = parseInt(e.target.value);
     const checked = e.target.checked;
     let nuevasEmpresas = [...formData.empresas_ids];
-    
+
     if (checked) {
-      nuevasEmpresas.push(parseInt(value));
+      if (formData.rol === 'visualizador') {
+        nuevasEmpresas = [value]; // solo una empresa
+      } else {
+        nuevasEmpresas.push(value);
+      }
     } else {
-      nuevasEmpresas = nuevasEmpresas.filter(id => id !== parseInt(value));
+      nuevasEmpresas = nuevasEmpresas.filter(id => id !== value);
     }
     setFormData({ ...formData, empresas_ids: nuevasEmpresas });
   };
@@ -303,7 +307,10 @@ function Usuarios() {
                 
                 {formData.rol !== 'super_admin' && (
                   <div className="form-group">
-                    <label>Empresas Asignadas</label>
+                    <label>
+                      Empresa{formData.rol === 'visualizador' ? '' : 's'} Asignada{formData.rol === 'visualizador' ? '' : 's'}
+                      {formData.rol === 'visualizador' && <span style={{fontSize:'11px',color:'#92400e',fontWeight:'400',marginLeft:'8px'}}>(máximo 1)</span>}
+                    </label>
                     <div className="empresas-checkbox-group">
                       {empresas.length === 0 ? (
                         <p className="no-empresas">No hay empresas disponibles</p>

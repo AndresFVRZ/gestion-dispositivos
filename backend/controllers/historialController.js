@@ -2,7 +2,7 @@ const pool = require('../config/db');
 
 const getHistorial = async (req, res) => {
     try {
-        const { limite = 100, offset = 0, accion, fecha_desde, fecha_hasta } = req.query;
+        const { limite = 100, offset = 0, accion, fecha_desde, fecha_hasta, sin_limite } = req.query;
         const usuario = req.usuario;
         
         let query = `
@@ -13,9 +13,12 @@ const getHistorial = async (req, res) => {
                        WHEN h.accion = 'ELIMINAR'               THEN 'Papelera'
                        WHEN h.accion = 'RESTAURAR'              THEN 'Restauración'
                        WHEN h.accion = 'ELIMINAR_PERMANENTE'    THEN 'Eliminación permanente'
-                       WHEN h.accion = 'MANTENIMIENTO_CREAR'    THEN 'Mantenimiento registrado'
-                       WHEN h.accion = 'MANTENIMIENTO_EDITAR'   THEN 'Mantenimiento editado'
-                       WHEN h.accion = 'MANTENIMIENTO_ELIMINAR' THEN 'Mantenimiento eliminado'
+                       WHEN h.accion = 'MANTENIMIENTO_CREAR'      THEN 'Mantenimiento registrado'
+                       WHEN h.accion = 'MANTENIMIENTO_EDITAR'     THEN 'Mantenimiento editado'
+                       WHEN h.accion = 'MANTENIMIENTO_ELIMINAR'   THEN 'Mantenimiento eliminado'
+                       WHEN h.accion = 'MANTENIMIENTO_COMPLETAR'  THEN 'Mantenimiento completado'
+                       WHEN h.accion = 'MANTENIMIENTO_APROBAR'    THEN 'Mantenimiento aprobado'
+                       WHEN h.accion = 'MANTENIMIENTO_RECHAZAR'   THEN 'Mantenimiento rechazado'
                        ELSE h.accion
                    END as accion_texto
             FROM historial_acciones h
@@ -52,8 +55,12 @@ const getHistorial = async (req, res) => {
             paramCount++;
         }
         
-        query += ` ORDER BY h.fecha DESC LIMIT $${paramCount} OFFSET $${paramCount + 1}`;
-        params.push(limite, offset);
+        if (sin_limite === 'true') {
+            query += ` ORDER BY h.fecha DESC`;
+        } else {
+            query += ` ORDER BY h.fecha DESC LIMIT $${paramCount} OFFSET $${paramCount + 1}`;
+            params.push(limite, offset);
+        }
         
         const result = await pool.query(query, params);
         

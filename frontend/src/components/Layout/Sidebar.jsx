@@ -60,7 +60,6 @@ const Sidebar = () => {
       { path: '/super-admin',    nombre: 'Inicio'          },
       { path: '/equipos',        nombre: 'Equipos'         },
       { path: '/mantenimientos', nombre: 'Mantenimientos'  },
-      { path: '/sedes',          nombre: 'Sedes'           },
       { path: '/usuarios',       nombre: 'Usuarios'        },
       { path: '/empresas',       nombre: 'Empresas'        },
       { path: '/papelera',       nombre: 'Papelera'        },
@@ -70,7 +69,6 @@ const Sidebar = () => {
       { path: '/dashboard',      nombre: 'Inicio'          },
       { path: '/equipos',        nombre: 'Equipos'         },
       { path: '/mantenimientos', nombre: 'Mantenimientos'  },
-      { path: '/sedes',          nombre: 'Sedes'           },
       { path: '/historial',      nombre: 'Historial'       },
     ],
     visualizador: [

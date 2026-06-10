@@ -2,6 +2,7 @@
 // 1. IMPORTACIONES
 // ==========================================
 import React, { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
 import { getHistorial } from '../services/historialService';
 import { useAuth } from '../context/AuthContext';
 import jsPDF from 'jspdf';
@@ -63,9 +64,12 @@ function Historial() {
       'ELIMINAR':              'Papelera',
       'RESTAURAR':             'Restauración',
       'ELIMINAR_PERMANENTE':   'Eliminación permanente',
-      'MANTENIMIENTO_CREAR':   'Mantenimiento registrado',
-      'MANTENIMIENTO_EDITAR':  'Mantenimiento editado',
-      'MANTENIMIENTO_ELIMINAR':'Mantenimiento eliminado',
+      'MANTENIMIENTO_CREAR':     'Mantenimiento registrado',
+      'MANTENIMIENTO_EDITAR':    'Mantenimiento editado',
+      'MANTENIMIENTO_ELIMINAR':  'Mantenimiento eliminado',
+      'MANTENIMIENTO_COMPLETAR': 'Mantenimiento completado',
+      'MANTENIMIENTO_APROBAR':   'Mantenimiento aprobado',
+      'MANTENIMIENTO_RECHAZAR':  'Mantenimiento rechazado',
     };
     return map[accion] || accion;
   };
@@ -73,88 +77,128 @@ function Historial() {
   const descargarPDF = async () => {
     setGenerandoPDF(true);
     try {
+      // Traer todos los registros con los filtros activos, sin límite
+      const params = { sin_limite: 'true' };
+      if (filtroAccion !== 'todos') params.accion = filtroAccion;
+      if (fechaDesde) params.fecha_desde = fechaDesde;
+      if (fechaHasta) params.fecha_hasta = fechaHasta;
+      const res = await getHistorial(params);
+      const datos = res?.data || [];
+      if (datos.length === 0) { toast.error('No hay registros para descargar'); return; }
+
       const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-
-      // Encabezado
-      doc.setFillColor(30, 64, 175);
-      doc.rect(0, 0, 297, 22, 'F');
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(14);
-      doc.setFont('helvetica', 'bold');
-      doc.text('EMTRA — Historial de Acciones', 14, 14);
-
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'normal');
       const fechaGen = new Date().toLocaleString('es-CO');
-      doc.text(`Generado: ${fechaGen}`, 297 - 14, 14, { align: 'right' });
-
-      // Filtros aplicados
-      doc.setTextColor(100, 100, 100);
-      doc.setFontSize(8);
-      let filtroTexto = `Total registros: ${historial.length}`;
-      if (filtroAccion !== 'todos') filtroTexto += `  |  Acción: ${filtroAccion}`;
-      if (fechaDesde) filtroTexto += `  |  Desde: ${fechaDesde}`;
-      if (fechaHasta) filtroTexto += `  |  Hasta: ${fechaHasta}`;
-      doc.text(filtroTexto, 14, 28);
 
       const accionColor = (accion) => {
         const map = {
-          'CREAR':               [16, 185, 129],
-          'EDITAR':              [59, 130, 246],
-          'ELIMINAR':            [245, 158, 11],
-          'RESTAURAR':           [139, 92, 246],
-          'ELIMINAR_PERMANENTE': [239, 68, 68],
+          'CREAR':                 [16, 185, 129],
+          'EDITAR':                [59, 130, 246],
+          'ELIMINAR':              [245, 158, 11],
+          'RESTAURAR':             [139, 92, 246],
+          'ELIMINAR_PERMANENTE':   [239, 68, 68],
+          'MANTENIMIENTO_CREAR':   [14, 165, 233],
+          'MANTENIMIENTO_EDITAR':  [14, 165, 233],
+          'MANTENIMIENTO_ELIMINAR':[245, 158, 11],
         };
         return map[accion] || [100, 116, 139];
       };
 
+      // ── Encabezado ──
+      doc.setFillColor(30, 64, 175);
+      doc.rect(0, 0, 297, 20, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(13); doc.setFont('helvetica', 'bold');
+      doc.text('EMTRA — Historial de Acciones', 14, 13);
+      doc.setFontSize(8); doc.setFont('helvetica', 'normal');
+      doc.text(`Generado: ${fechaGen}`, 283, 13, { align: 'right' });
+
+      // ── Filtros aplicados ──
+      doc.setTextColor(80, 80, 80); doc.setFontSize(8);
+      let filtroTexto = `Total registros: ${datos.length}`;
+      if (filtroAccion !== 'todos') filtroTexto += `  |  Tipo: ${getNombreAccion(filtroAccion)}`;
+      if (fechaDesde) filtroTexto += `  |  Desde: ${fechaDesde}`;
+      if (fechaHasta) filtroTexto += `  |  Hasta: ${fechaHasta}`;
+      doc.text(filtroTexto, 14, 27);
+
+      // ── Resumen por tipo de acción ──
+      const conteo = {};
+      datos.forEach(item => {
+        const nombre = getNombreAccion(item.accion);
+        conteo[nombre] = (conteo[nombre] || 0) + 1;
+      });
+      const resumenBody = Object.entries(conteo)
+        .sort((a, b) => b[1] - a[1])
+        .map(([nombre, cant]) => [nombre, cant, `${Math.round(cant / datos.length * 100)}%`]);
+
       autoTable(doc, {
-        startY: 32,
-        head: [['Fecha', 'Usuario', 'Rol', 'Acción', 'Equipo', 'Código', 'Detalles', 'IP']],
-        body: historial.map(item => [
-          new Date(item.fecha).toLocaleString('es-CO'),
-          item.usuario_nombre || '-',
-          item.usuario_rol || '-',
-          item.accion_texto || item.accion || '-',
-          item.equipo_nombre || '-',
-          item.equipo_codigo || '-',
-          item.detalles || '-',
-          item.ip_address || '-',
-        ]),
-        styles: { fontSize: 8, cellPadding: 3, overflow: 'linebreak' },
-        headStyles: { fillColor: [30, 64, 175], textColor: 255, fontStyle: 'bold', fontSize: 8 },
+        startY: 31,
+        head: [['Tipo de acción', 'Registros', '%']],
+        body: resumenBody,
+        styles: { fontSize: 7, cellPadding: 2 },
+        headStyles: { fillColor: [51, 65, 85], textColor: 255, fontSize: 7, fontStyle: 'bold' },
         alternateRowStyles: { fillColor: [248, 250, 252] },
-        columnStyles: {
-          0: { cellWidth: 32 },
-          1: { cellWidth: 30 },
-          2: { cellWidth: 22 },
-          3: { cellWidth: 28 },
-          4: { cellWidth: 35 },
-          5: { cellWidth: 22 },
-          6: { cellWidth: 'auto' },
-          7: { cellWidth: 28 },
-        },
-        didParseCell: (data) => {
-          if (data.column.index === 3 && data.section === 'body') {
-            const accion = historial[data.row.index]?.accion;
-            const [r, g, b] = accionColor(accion);
-            data.cell.styles.textColor = [r, g, b];
-            data.cell.styles.fontStyle = 'bold';
-          }
-        },
+        columnStyles: { 0: { cellWidth: 60 }, 1: { cellWidth: 22, halign: 'center' }, 2: { cellWidth: 16, halign: 'center' } },
+        tableWidth: 100,
+        margin: { left: 14 },
       });
 
-      // Pie de página
+      // ── Detalle agrupado por tipo ──
+      const grupos = {};
+      datos.forEach(item => {
+        const key = getNombreAccion(item.accion);
+        if (!grupos[key]) grupos[key] = [];
+        grupos[key].push(item);
+      });
+
+      let y = doc.lastAutoTable.finalY + 6;
+
+      for (const [tipo, items] of Object.entries(grupos).sort((a, b) => b[1].length - a[1].length)) {
+        const color = accionColor(items[0]?.accion);
+
+        // Cabecera de grupo
+        doc.setFillColor(...color);
+        doc.roundedRect(14, y, 269, 6, 1, 1, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(8); doc.setFont('helvetica', 'bold');
+        doc.text(`${tipo.toUpperCase()}  (${items.length} registro${items.length !== 1 ? 's' : ''})`, 17, y + 4.2);
+        y += 7;
+
+        autoTable(doc, {
+          startY: y,
+          head: [['Fecha', 'Usuario', 'Equipo', 'Detalles']],
+          body: items.map(item => [
+            new Date(item.fecha).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' }),
+            item.usuario_nombre || '-',
+            item.equipo_nombre || '-',
+            item.detalles || '-',
+          ]),
+          styles: { fontSize: 7, cellPadding: 2, overflow: 'linebreak' },
+          headStyles: { fillColor: color, textColor: 255, fontSize: 7, fontStyle: 'bold' },
+          alternateRowStyles: { fillColor: [248, 250, 252] },
+          columnStyles: {
+            0: { cellWidth: 32 },
+            1: { cellWidth: 42 },
+            2: { cellWidth: 50 },
+            3: { cellWidth: 'auto' },
+          },
+          margin: { left: 14, right: 14 },
+        });
+
+        y = doc.lastAutoTable.finalY + 5;
+      }
+
+      // ── Pie de página ──
       const pageCount = doc.internal.getNumberOfPages();
       for (let i = 1; i <= pageCount; i++) {
         doc.setPage(i);
-        doc.setFontSize(7);
-        doc.setTextColor(160, 160, 160);
-        doc.text(`Página ${i} de ${pageCount}`, 297 / 2, 205, { align: 'center' });
+        doc.setFontSize(7); doc.setTextColor(180, 180, 180);
+        doc.text(`Página ${i} de ${pageCount}  —  EMTRA Gestión de Equipos`, 148.5, 205, { align: 'center' });
       }
 
-      const nombreArchivo = `historial_${new Date().toISOString().split('T')[0]}.pdf`;
-      doc.save(nombreArchivo);
+      doc.save(`historial_${new Date().toISOString().split('T')[0]}.pdf`);
+    } catch (err) {
+      toast.error('Error al generar el PDF');
+      console.error(err);
     } finally {
       setGenerandoPDF(false);
     }

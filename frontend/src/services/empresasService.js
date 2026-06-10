@@ -1,6 +1,7 @@
 import api from './api';
 
 export const getEmpresas = async () => api.get('/empresas');
+export const getEmpresasParaPrestamo = async () => api.get('/empresas/para-prestamo');
 
 export const crearEmpresa = async (data) => api.post('/empresas', data);
 

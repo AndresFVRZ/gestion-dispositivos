@@ -14,7 +14,6 @@ import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import ActivarCuenta from './pages/ActivarCuenta';
 import Empresas from './pages/Empresas';
-import Sedes from './pages/Sedes';
 import Mantenimientos from './pages/Mantenimientos';
 import './index.css';
 
@@ -48,9 +47,16 @@ function AppContent() {
 
   if (cargando) {
     return (
-      <div className="loading-container">
-        <div className="spinner"></div>
-        <p>Cargando sistema...</p>
+      <div className="splash-screen">
+        <div className="splash-card">
+          <div className="splash-logo">GE</div>
+          <h1 className="splash-title">Gestión de Equipos</h1>
+          <p className="splash-sub">Sistema Corporativo</p>
+          <div className="splash-bar-track">
+            <div className="splash-bar-fill" />
+          </div>
+          <p className="splash-status">Iniciando sesión...</p>
+        </div>
       </div>
     );
   }
@@ -80,7 +86,6 @@ function AppContent() {
           <Route path="/empresas" element={<Empresas />} />
           <Route path="/papelera" element={<Papelera />} />
           <Route path="/historial" element={<Historial />} />
-          <Route path="/sedes" element={<Sedes />} />
           <Route path="/mantenimientos" element={<Mantenimientos />} />
         </Routes>
       </Layout>
@@ -95,7 +100,6 @@ function AppContent() {
           <Route path="/" element={<Navigate to="/dashboard" />} />
           <Route path="/dashboard" element={<GestionDashboard />} />
           <Route path="/equipos" element={<Equipos />} />
-          <Route path="/sedes" element={<Sedes />} />
           <Route path="/mantenimientos" element={<Mantenimientos />} />
           <Route path="/historial" element={<Historial />} />
         </Routes>
@@ -122,24 +126,71 @@ export default App;
 // ============================================
 const appStyles = document.createElement('style');
 appStyles.textContent = `
-  .loading-container {
+  /* ── Splash screen ── */
+  .splash-screen {
     min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #0f2b5c 0%, #1a3d7c 60%, #1e4fa0 100%);
+  }
+
+  .splash-card {
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
-    background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
-    color: white;
+    gap: 10px;
+    animation: splash-in 0.5s ease;
   }
 
-  .spinner {
-    width: 48px;
-    height: 48px;
-    border: 4px solid rgba(255,255,255,0.3);
-    border-top-color: white;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-    margin-bottom: 16px;
+  @keyframes splash-in {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .splash-logo {
+    width: 72px; height: 72px;
+    background: linear-gradient(135deg, #4299e1, #2563eb);
+    border-radius: 20px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 28px; font-weight: 800; color: white;
+    box-shadow: 0 8px 32px rgba(37,99,235,0.5);
+    margin-bottom: 8px;
+  }
+
+  .splash-title {
+    font-size: 24px; font-weight: 700; color: white; margin: 0;
+    letter-spacing: -0.3px;
+  }
+
+  .splash-sub {
+    font-size: 13px; color: rgba(255,255,255,0.55); margin: 0;
+    text-transform: uppercase; letter-spacing: 1.5px;
+  }
+
+  .splash-bar-track {
+    width: 200px; height: 3px;
+    background: rgba(255,255,255,0.15);
+    border-radius: 99px;
+    overflow: hidden;
+    margin-top: 24px;
+  }
+
+  .splash-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #4299e1, #60a5fa);
+    border-radius: 99px;
+    animation: splash-bar 1.6s ease-in-out infinite;
+  }
+
+  @keyframes splash-bar {
+    0%   { width: 0%;   margin-left: 0; }
+    50%  { width: 70%;  margin-left: 0; }
+    100% { width: 0%;   margin-left: 100%; }
+  }
+
+  .splash-status {
+    font-size: 12px; color: rgba(255,255,255,0.45); margin: 4px 0 0;
   }
 
   @keyframes spin {
