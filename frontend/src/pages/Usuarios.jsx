@@ -25,7 +25,7 @@ function Usuarios() {
     nombre: '',
     email: '',
     password: '',
-    rol: 'visualizador',
+    rol: 'financiera',
     empresas_ids: []
   });
 
@@ -59,7 +59,7 @@ function Usuarios() {
       nombre: '',
       email: '',
       password: '',
-      rol: 'visualizador',
+      rol: 'financiera',
       empresas_ids: []
     });
     setSelectedUsuario(null);
@@ -73,7 +73,7 @@ function Usuarios() {
       nombre: usuario.nombre || '',
       email: usuario.email || '',
       password: '',
-      rol: usuario.rol || 'visualizador',
+      rol: usuario.rol || 'financiera',
       empresas_ids: usuario.empresas_ids || []
     });
     setShowModal(true);
@@ -107,9 +107,6 @@ function Usuarios() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    console.log('📤 Enviando datos:', formData);
-    
     if (!formData.nombre || !formData.email) {
       toast.error('Nombre y email son obligatorios'); return;
     }
@@ -127,7 +124,7 @@ function Usuarios() {
 
       if (result && result.success) {
         setShowModal(false);
-        setFormData({ nombre: '', email: '', password: '', rol: 'visualizador', empresas_ids: [] });
+        setFormData({ nombre: '', email: '', password: '', rol: 'financiera', empresas_ids: [] });
         toast.success(modalMode === 'create' ? 'Usuario creado exitosamente' : 'Usuario actualizado');
         await cargarDatos();
       } else {
@@ -148,8 +145,8 @@ function Usuarios() {
     let nuevasEmpresas = [...formData.empresas_ids];
 
     if (checked) {
-      if (formData.rol === 'visualizador') {
-        nuevasEmpresas = [value]; // solo una empresa
+      if (formData.rol === 'financiera') {
+        nuevasEmpresas = [value]; // financiera: solo una empresa
       } else {
         nuevasEmpresas.push(value);
       }
@@ -159,23 +156,23 @@ function Usuarios() {
     setFormData({ ...formData, empresas_ids: nuevasEmpresas });
   };
 
-  const getRolTexto = (rol) => {
-    switch (rol) {
-      case 'super_admin': return 'Super Administrador';
-      case 'gestion': return 'Gestión';
-      case 'visualizador': return 'Visualizador';
-      default: return 'Usuario';
-    }
-  };
+  const getRolTexto = (rol) => ({
+    super_admin:   'Super Administrador',
+    administrador: 'Administrador',
+    logistica:     'Logística',
+    soporte:       'Soporte',
+    gerencia:      'Gerencia',
+    financiera:    'Financiera',
+  }[rol] || 'Usuario');
 
-  const getRolColor = (rol) => {
-    switch (rol) {
-      case 'super_admin': return 'rol-super-admin';
-      case 'gestion': return 'rol-gestion';
-      case 'visualizador': return 'rol-visualizador';
-      default: return 'rol-default';
-    }
-  };
+  const getRolColor = (rol) => ({
+    super_admin:   'rol-super-admin',
+    administrador: 'rol-administrador',
+    logistica:     'rol-logistica',
+    soporte:       'rol-soporte',
+    gerencia:      'rol-gerencia',
+    financiera:    'rol-financiera',
+  }[rol] || 'rol-default');
 
   const usuariosFiltrados = usuarios.filter(u =>
     u.nombre?.toLowerCase().includes(filtro.toLowerCase()) ||
@@ -293,8 +290,11 @@ function Usuarios() {
                   <div className="form-group">
                     <label>Rol *</label>
                     <select name="rol" value={formData.rol} onChange={handleInputChange} required>
-                      <option value="visualizador">Visualizador</option>
-                      <option value="gestion">Gestión</option>
+                      <option value="financiera">Financiera</option>
+                      <option value="soporte">Soporte</option>
+                      <option value="logistica">Logística</option>
+                      <option value="gerencia">Gerencia</option>
+                      <option value="administrador">Administrador</option>
                       <option value="super_admin">Super Administrador</option>
                     </select>
                   </div>
@@ -308,8 +308,8 @@ function Usuarios() {
                 {formData.rol !== 'super_admin' && (
                   <div className="form-group">
                     <label>
-                      Empresa{formData.rol === 'visualizador' ? '' : 's'} Asignada{formData.rol === 'visualizador' ? '' : 's'}
-                      {formData.rol === 'visualizador' && <span style={{fontSize:'11px',color:'#92400e',fontWeight:'400',marginLeft:'8px'}}>(máximo 1)</span>}
+                      Empresa{formData.rol === 'financiera' ? '' : 's'} Asignada{formData.rol === 'financiera' ? '' : 's'}
+                      {formData.rol === 'financiera' && <span style={{fontSize:'11px',color:'#92400e',fontWeight:'400',marginLeft:'8px'}}>(máximo 1)</span>}
                     </label>
                     <div className="empresas-checkbox-group">
                       {empresas.length === 0 ? (
@@ -328,8 +328,8 @@ function Usuarios() {
                         ))
                       )}
                     </div>
-                    {formData.rol === 'gestion' && formData.empresas_ids.length === 0 && (
-                      <small className="warning-text">Los usuarios con rol Gestión deben tener al menos una empresa asignada</small>
+                    {formData.rol !== 'super_admin' && formData.empresas_ids.length === 0 && (
+                      <small className="warning-text">Debe asignar al menos una empresa</small>
                     )}
                   </div>
                 )}
@@ -501,20 +501,13 @@ usuariosStyles.textContent = `
     font-weight: 500;
   }
 
-  .rol-super-admin {
-    background: #fef3c7;
-    color: #d97706;
-  }
-
-  .rol-gestion {
-    background: #dbeafe;
-    color: #1e40af;
-  }
-
-  .rol-visualizador {
-    background: #e2e8f0;
-    color: #475569;
-  }
+  .rol-super-admin   { background: #fef3c7; color: #d97706; }
+  .rol-administrador { background: #ede9fe; color: #6d28d9; }
+  .rol-logistica     { background: #d1fae5; color: #065f46; }
+  .rol-soporte       { background: #ffedd5; color: #c2410c; }
+  .rol-gerencia      { background: #1e293b; color: #e2e8f0; }
+  .rol-financiera    { background: #ecfeff; color: #0e7490; }
+  .rol-default       { background: #e2e8f0; color: #475569; }
 
   .acciones-cell {
     white-space: nowrap;

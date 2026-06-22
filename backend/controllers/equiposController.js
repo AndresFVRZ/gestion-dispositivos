@@ -146,7 +146,7 @@ const crearEquipo = async (req, res) => {
             estado,
             ubicacion,
             asignado_a,
-            fecha_asignacion,
+            fecha_garantia,
             procesador,
             ram,
             disco_duro,
@@ -176,7 +176,11 @@ const crearEquipo = async (req, res) => {
             }
         }
 
-        const fechaAsig = fecha_asignacion || null;
+        // Solo super_admin puede asignar proceso y persona al crear
+        const procesoIdCrear   = req.usuario?.rol === 'super_admin' ? (proceso_id || null) : null;
+        const asignadoACrear   = req.usuario?.rol === 'super_admin' ? (asignado_a  || '')   : '';
+
+        const fechaGar  = fecha_garantia || null;
         const garantiaVal = garantia || null;
         const client = await pool.connect();
         try {
@@ -184,16 +188,16 @@ const crearEquipo = async (req, res) => {
             const result = await client.query(
                 `INSERT INTO equipos
                     (codigo, nombre_equipo, tipo_id, marca, modelo, serial, estado,
-                     ubicacion, piso, modulo, asignado_a, fecha_asignacion, procesador, ram, disco_duro,
+                     ubicacion, piso, modulo, asignado_a, fecha_garantia, procesador, ram, disco_duro,
                      sistema_operativo, garantia, especificaciones, observaciones,
                      empresa_id, numero_placa, sede, prestado_a_empresa_id, proceso_id, created_at)
                  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, NOW())
                  RETURNING *`,
                 [
                     req.body.codigo || null, nombre_equipo, tipo_id || null, marca, modelo, serial, estado,
-                    ubicacion, piso || null, modulo || null, asignado_a, fechaAsig, procesador, ram, disco_duro,
+                    ubicacion, piso || null, modulo || null, asignadoACrear, fechaGar, procesador, ram, disco_duro,
                     sistema_operativo, garantiaVal, especificaciones, observaciones || null,
-                    empresa_id, numero_placa || null, sede || null, prestado_a_empresa_id || null, proceso_id || null
+                    empresa_id, numero_placa || null, sede || null, prestado_a_empresa_id || null, procesoIdCrear
                 ]
             );
             await guardarPerifericos(client, result.rows[0].id, perifericos);
@@ -215,6 +219,8 @@ const crearEquipo = async (req, res) => {
 // ==========================================
 // ACTUALIZAR EQUIPO - CON HISTORIAL
 // ==========================================
+const ESTADOS_BAJA = ['Baja', 'Canibalizar'];
+const ROLES_BAJA   = ['super_admin', 'gerencia'];
 const actualizarEquipo = async (req, res) => {
     try {
         const { id } = req.params;
@@ -227,7 +233,7 @@ const actualizarEquipo = async (req, res) => {
             estado,
             ubicacion,
             asignado_a,
-            fecha_asignacion,
+            fecha_garantia,
             procesador,
             ram,
             disco_duro,
@@ -245,8 +251,25 @@ const actualizarEquipo = async (req, res) => {
             perifericos
         } = req.body;
 
-        if (!req.body.es_importacion && ['Dañado', 'Mantenimiento', 'Baja'].includes(estado) && !observaciones?.trim())
+        if (!ROLES_BAJA.includes(req.usuario?.rol) && ESTADOS_BAJA.includes(estado))
+            return res.status(403).json({ success: false, message: 'Solo el perfil Gerencia puede poner equipos en Baja o Canibalizar' });
+
+        if (!req.body.es_importacion && ['Dañado', 'Mantenimiento', 'Baja', 'Canibalizar'].includes(estado) && !observaciones?.trim())
             return res.status(400).json({ success: false, message: `El campo Observaciones es obligatorio cuando el estado es "${estado}"` });
+
+        // Solo super_admin y soporte pueden modificar proceso y persona asignada
+        const ROLES_ASIGNAR = ['super_admin', 'soporte'];
+        let procesoIdFinal = proceso_id || null;
+        let asignadoAFinal = asignado_a || '';
+        if (!ROLES_ASIGNAR.includes(req.usuario?.rol)) {
+            const curr = await pool.query(
+                'SELECT proceso_id, asignado_a FROM equipos WHERE id = $1 AND eliminado = FALSE', [id]
+            );
+            if (curr.rows.length > 0) {
+                procesoIdFinal = curr.rows[0].proceso_id;
+                asignadoAFinal = curr.rows[0].asignado_a || '';
+            }
+        }
 
         if (tipo_id) {
             const tipoCheck = await pool.query(
@@ -257,7 +280,7 @@ const actualizarEquipo = async (req, res) => {
             }
         }
 
-        const fechaAsig = fecha_asignacion || null;
+        const fechaGar  = fecha_garantia || null;
         const garantiaVal = garantia || null;
         const client = await pool.connect();
         try {
@@ -266,7 +289,7 @@ const actualizarEquipo = async (req, res) => {
                 `UPDATE equipos SET
                     codigo = $1, nombre_equipo = $2, tipo_id = $3, marca = $4, modelo = $5,
                     serial = $6, estado = $7, ubicacion = $8, piso = $9, modulo = $10,
-                    asignado_a = $11, fecha_asignacion = $12, procesador = $13, ram = $14,
+                    asignado_a = $11, fecha_garantia = $12, procesador = $13, ram = $14,
                     disco_duro = $15, sistema_operativo = $16, garantia = $17,
                     especificaciones = $18, observaciones = $19, empresa_id = $20,
                     numero_placa = $21, sede = $22, prestado_a_empresa_id = $23, proceso_id = $24
@@ -274,10 +297,10 @@ const actualizarEquipo = async (req, res) => {
                  RETURNING *`,
                 [
                     req.body.codigo || null, nombre_equipo, tipo_id || null, marca, modelo, serial, estado,
-                    ubicacion, piso || null, modulo || null, asignado_a, fechaAsig, procesador, ram,
+                    ubicacion, piso || null, modulo || null, asignadoAFinal, fechaGar, procesador, ram,
                     disco_duro, sistema_operativo, garantiaVal, especificaciones, observaciones || null,
                     empresa_id, numero_placa || null, sede || null, prestado_a_empresa_id || null,
-                    proceso_id || null, id
+                    procesoIdFinal, id
                 ]
             );
             if (result.rows.length === 0) {
@@ -296,141 +319,6 @@ const actualizarEquipo = async (req, res) => {
         }
     } catch (error) {
         console.error('Error en actualizarEquipo:', error);
-        res.status(500).json({ success: false, message: error.message });
-    }
-};
-
-// ==========================================
-// ELIMINAR EQUIPO (SOFT DELETE) - CON LOGS
-// ==========================================
-const eliminarEquipo = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const usuarioId = req.usuario.id;
-
-        const result = await pool.query(
-            `UPDATE equipos SET
-                eliminado = TRUE,
-                eliminado_en = NOW(),
-                eliminado_por = $1
-             WHERE id = $2 AND eliminado = FALSE
-             RETURNING *`,
-            [usuarioId, id]
-        );
-
-        if (result.rows.length === 0) {
-            return res.status(404).json({ success: false, message: 'Equipo no encontrado o ya eliminado' });
-        }
-
-        await registrarHistorial(pool, req, 'ELIMINAR', result.rows[0], `Equipo movido a papelera`);
-
-        res.json({ success: true, message: 'Equipo movido a papelera', data: result.rows[0] });
-    } catch (error) {
-        console.error('Error en eliminarEquipo:', error);
-        res.status(500).json({ success: false, message: error.message });
-    }
-};
-
-// ==========================================
-// RESTAURAR EQUIPO - CON HISTORIAL
-// ==========================================
-const restaurarEquipo = async (req, res) => {
-    try {
-        const { id } = req.params;
-
-        const result = await pool.query(
-            `UPDATE equipos SET 
-                eliminado = FALSE, 
-                eliminado_en = NULL, 
-                eliminado_por = NULL 
-             WHERE id = $1 AND eliminado = TRUE
-             RETURNING *`,
-            [id]
-        );
-        
-        if (result.rows.length === 0) {
-            return res.status(404).json({ success: false, message: 'Equipo no encontrado en papelera' });
-        }
-
-        await registrarHistorial(pool, req, 'RESTAURAR', result.rows[0], `Equipo restaurado desde papelera`);
-
-        res.json({ success: true, message: 'Equipo restaurado correctamente', data: result.rows[0] });
-    } catch (error) {
-        console.error('Error en restaurarEquipo:', error);
-        res.status(500).json({ success: false, message: error.message });
-    }
-};
-
-// ==========================================
-// ELIMINAR PERMANENTEMENTE - CON HISTORIAL
-// ==========================================
-const eliminarPermanente = async (req, res) => {
-    try {
-        const { id } = req.params;
-
-        const equipoAntes = await pool.query('SELECT * FROM equipos WHERE id = $1', [id]);
-        
-        const result = await pool.query('DELETE FROM equipos WHERE id = $1 AND eliminado = TRUE RETURNING *', [id]);
-        
-        if (result.rows.length === 0) {
-            return res.status(404).json({ success: false, message: 'Equipo no encontrado en la papelera' });
-        }
-
-        await registrarHistorial(pool, req, 'ELIMINAR_PERMANENTE', equipoAntes.rows[0], `Equipo eliminado permanentemente`);
-
-        res.json({ success: true, message: 'Equipo eliminado permanentemente' });
-    } catch (error) {
-        console.error('Error en eliminarPermanente:', error);
-        res.status(500).json({ success: false, message: error.message });
-    }
-};
-
-// ==========================================
-// OBTENER PAPELERA
-// ==========================================
-const getPapelera = async (req, res) => {
-    try {
-        const usuario = req.usuario;
-        
-        let empresaIds = [];
-        
-        if (usuario.rol === 'super_admin') {
-            const result = await pool.query(
-                `SELECT eq.*, e.nombre as empresa_nombre,
-                        td.nombre as tipo_nombre, u.nombre as eliminado_por_nombre
-                 FROM equipos eq
-                 JOIN empresas e ON eq.empresa_id = e.id
-                 LEFT JOIN tipo_dispositivo td ON eq.tipo_id = td.id
-                 LEFT JOIN usuarios u ON eq.eliminado_por = u.id
-                 WHERE eq.eliminado = TRUE
-                 ORDER BY eq.eliminado_en DESC`
-            );
-            return res.json({ success: true, data: result.rows });
-        }
-
-        if (usuario.empresas && usuario.empresas.length > 0) {
-            empresaIds = usuario.empresas.map(e => e.id);
-        } else if (usuario.empresa_id) {
-            empresaIds = [usuario.empresa_id];
-        } else {
-            return res.json({ success: true, data: [] });
-        }
-
-        const result = await pool.query(
-            `SELECT eq.*, e.nombre as empresa_nombre,
-                    td.nombre as tipo_nombre, u.nombre as eliminado_por_nombre
-             FROM equipos eq
-             JOIN empresas e ON eq.empresa_id = e.id
-             LEFT JOIN tipo_dispositivo td ON eq.tipo_id = td.id
-             LEFT JOIN usuarios u ON eq.eliminado_por = u.id
-             WHERE eq.empresa_id = ANY($1::int[]) AND eq.eliminado = TRUE
-             ORDER BY eq.eliminado_en DESC`,
-            [empresaIds]
-        );
-        
-        res.json({ success: true, data: result.rows });
-    } catch (error) {
-        console.error('Error en getPapelera:', error);
         res.status(500).json({ success: false, message: error.message });
     }
 };
@@ -506,9 +394,5 @@ module.exports = {
     getEquipoById,
     crearEquipo,
     actualizarEquipo,
-    eliminarEquipo,
-    restaurarEquipo,
-    eliminarPermanente,
-    getPapelera,
     reasignarPerifericos
 };

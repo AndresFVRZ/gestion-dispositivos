@@ -5,11 +5,13 @@ import Sidebar from './components/Layout/Sidebar';
 import Login from './pages/Login';
 import Equipos from './pages/Equipos';
 import SuperAdminDashboard from './pages/SuperAdminDashboard';
-import GestionDashboard from './pages/GestionDashboard';
-import VisualizadorDashboard from './pages/VisualizadorDashboard';
+import AdministradorDashboard from './pages/AdministradorDashboard';
+import LogisticaDashboard from './pages/LogisticaDashboard';
+import SoporteDashboard from './pages/SoporteDashboard';
+import GerenciaDashboard from './pages/GerenciaDashboard';
+import FinancieraDashboard from './pages/FinancieraDashboard';
 import Historial from './pages/Historial';
 import Usuarios from './pages/Usuarios';
-import Papelera from './pages/Papelera';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import ActivarCuenta from './pages/ActivarCuenta';
@@ -84,7 +86,6 @@ function AppContent() {
           <Route path="/equipos" element={<Equipos />} />
           <Route path="/usuarios" element={<Usuarios />} />
           <Route path="/empresas" element={<Empresas />} />
-          <Route path="/papelera" element={<Papelera />} />
           <Route path="/historial" element={<Historial />} />
           <Route path="/mantenimientos" element={<Mantenimientos />} />
         </Routes>
@@ -92,13 +93,42 @@ function AppContent() {
     );
   }
 
-  // GESTIÓN
-  if (usuario.rol === 'gestion') {
+  // ADMINISTRADOR — usuarios + inventario, sin mantenimientos
+  if (usuario.rol === 'administrador') {
     return (
       <Layout>
         <Routes>
           <Route path="/" element={<Navigate to="/dashboard" />} />
-          <Route path="/dashboard" element={<GestionDashboard />} />
+          <Route path="/dashboard" element={<AdministradorDashboard />} />
+          <Route path="/equipos" element={<Equipos />} />
+          <Route path="/usuarios" element={<Usuarios />} />
+          <Route path="/historial" element={<Historial />} />
+        </Routes>
+      </Layout>
+    );
+  }
+
+  // LOGÍSTICA — inventario, sin mantenimientos
+  if (usuario.rol === 'logistica') {
+    return (
+      <Layout>
+        <Routes>
+          <Route path="/" element={<Navigate to="/dashboard" />} />
+          <Route path="/dashboard" element={<LogisticaDashboard />} />
+          <Route path="/equipos" element={<Equipos />} />
+          <Route path="/historial" element={<Historial />} />
+        </Routes>
+      </Layout>
+    );
+  }
+
+  // SOPORTE — mantenimientos + asignación de proceso y persona
+  if (usuario.rol === 'soporte') {
+    return (
+      <Layout>
+        <Routes>
+          <Route path="/" element={<Navigate to="/dashboard" />} />
+          <Route path="/dashboard" element={<SoporteDashboard />} />
           <Route path="/equipos" element={<Equipos />} />
           <Route path="/mantenimientos" element={<Mantenimientos />} />
           <Route path="/historial" element={<Historial />} />
@@ -107,12 +137,39 @@ function AppContent() {
     );
   }
 
-  // VISUALIZADOR
+  // GERENCIA — exclusivo Baja y Canibalizar
+  if (usuario.rol === 'gerencia') {
+    return (
+      <Layout>
+        <Routes>
+          <Route path="/" element={<Navigate to="/dashboard" />} />
+          <Route path="/dashboard" element={<GerenciaDashboard />} />
+          <Route path="/equipos" element={<Equipos />} />
+          <Route path="/historial" element={<Historial />} />
+        </Routes>
+      </Layout>
+    );
+  }
+
+  // FINANCIERA — solo lectura con vista financiera
+  if (usuario.rol === 'financiera') {
+    return (
+      <Layout>
+        <Routes>
+          <Route path="/" element={<Navigate to="/dashboard" />} />
+          <Route path="/dashboard" element={<FinancieraDashboard />} />
+          <Route path="/equipos" element={<Equipos />} />
+        </Routes>
+      </Layout>
+    );
+  }
+
+  // Fallback — financiera por defecto
   return (
     <Layout>
       <Routes>
         <Route path="/" element={<Navigate to="/dashboard" />} />
-        <Route path="/dashboard" element={<VisualizadorDashboard />} />
+        <Route path="/dashboard" element={<FinancieraDashboard />} />
         <Route path="/equipos" element={<Equipos />} />
       </Routes>
     </Layout>

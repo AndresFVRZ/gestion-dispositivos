@@ -50,11 +50,11 @@ function SuperAdminDashboard() {
 
   const garantiasAlerta = equiposFiltrados.filter(eq => {
     if (!eq.garantia) return false;
-    const g = calcularGarantia(eq.fecha_asignacion || eq.created_at, eq.garantia);
+    const g = calcularGarantia(eq.fecha_garantia, eq.garantia);
     return g.tiene && (g.estado === 'critica' || g.estado === 'proxima');
   }).sort((a, b) => {
-    const ga = calcularGarantia(a.fecha_asignacion || a.created_at, a.garantia);
-    const gb = calcularGarantia(b.fecha_asignacion || b.created_at, b.garantia);
+    const ga = calcularGarantia(a.fecha_garantia, a.garantia);
+    const gb = calcularGarantia(b.fecha_garantia, b.garantia);
     return ga.diasTotales - gb.diasTotales;
   }).slice(0, 6);
 
@@ -188,7 +188,7 @@ function SuperAdminDashboard() {
           </div>
           <div style={{display:'flex',flexDirection:'column',gap:'8px',padding:'0 20px 16px'}}>
             {garantiasAlerta.map(eq => {
-              const g = calcularGarantia(eq.fecha_asignacion || eq.created_at, eq.garantia);
+              const g = calcularGarantia(eq.fecha_garantia, eq.garantia);
               const critica = g.estado === 'critica';
               return (
                 <div key={eq.id} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'10px 14px',background: critica ? '#fef2f2' : '#fffbeb',borderRadius:'8px',border:`1px solid ${critica ? '#fecaca' : '#fde68a'}`}}>
@@ -249,10 +249,10 @@ function SuperAdminDashboard() {
                     <tr key={eq.id}>
                       <td className="sa-code">{eq.codigo || '-'}</td>
                       <td className="sa-name">{eq.nombre_equipo || '-'}</td>
-                      <td className="sa-muted">{eq.tipo || '-'}</td>
+                      <td className="sa-muted">{eq.tipo_nombre || '-'}</td>
                       <td><span className="sa-badge" style={s}>{eq.estado || '-'}</span></td>
                       <td>{eq.asignado_a || '-'}</td>
-                      <td className="sa-muted">{eq.ubicacion || '-'}</td>
+                      <td className="sa-muted">{eq.proceso_nombre || '-'}</td>
                       {!empresaActiva && <td className="sa-muted">{eq.empresa_nombre || '-'}</td>}
                     </tr>
                   );

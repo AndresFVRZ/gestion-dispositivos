@@ -47,9 +47,6 @@ function Historial() {
     const map = {
       'CREAR':                 'badge-success',
       'EDITAR':                'badge-info',
-      'ELIMINAR':              'badge-warning',
-      'RESTAURAR':             'badge-info',
-      'ELIMINAR_PERMANENTE':   'badge-danger',
       'MANTENIMIENTO_CREAR':   'badge-mant',
       'MANTENIMIENTO_EDITAR':  'badge-mant',
       'MANTENIMIENTO_ELIMINAR':'badge-warning',
@@ -61,9 +58,6 @@ function Historial() {
     const map = {
       'CREAR':                 'Creación',
       'EDITAR':                'Edición',
-      'ELIMINAR':              'Papelera',
-      'RESTAURAR':             'Restauración',
-      'ELIMINAR_PERMANENTE':   'Eliminación permanente',
       'MANTENIMIENTO_CREAR':     'Mantenimiento registrado',
       'MANTENIMIENTO_EDITAR':    'Mantenimiento editado',
       'MANTENIMIENTO_ELIMINAR':  'Mantenimiento eliminado',
@@ -72,6 +66,69 @@ function Historial() {
       'MANTENIMIENTO_RECHAZAR':  'Mantenimiento rechazado',
     };
     return map[accion] || accion;
+  };
+
+  const obtenerDatosExport = async () => {
+    const params = { sin_limite: 'true' };
+    if (filtroAccion !== 'todos') params.accion = filtroAccion;
+    if (fechaDesde) params.fecha_desde = fechaDesde;
+    if (fechaHasta) params.fecha_hasta = fechaHasta;
+    const res = await getHistorial(params);
+    return res?.data || [];
+  };
+
+  const descargarCSV = async () => {
+    try {
+      const datos = await obtenerDatosExport();
+      if (datos.length === 0) { toast.error('No hay registros para descargar'); return; }
+      const headers = ['Fecha', 'Usuario', 'Rol', 'Acción', 'Equipo', 'Código', 'Detalles', 'IP'];
+      const filas = datos.map(item => [
+        new Date(item.fecha).toLocaleString('es-CO'),
+        item.usuario_nombre || '',
+        item.usuario_rol || '',
+        getNombreAccion(item.accion),
+        item.equipo_nombre || '',
+        item.equipo_codigo || '',
+        (item.detalles || '').replace(/"/g, '""'),
+        item.ip_address || '',
+      ]);
+      const csv = [headers, ...filas].map(row => row.map(v => `"${v}"`).join(',')).join('\n');
+      const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `historial_${new Date().toISOString().split('T')[0]}.csv`;
+      a.click(); URL.revokeObjectURL(url);
+      toast.success('CSV descargado');
+    } catch { toast.error('Error al generar el CSV'); }
+  };
+
+  const descargarTXT = async () => {
+    try {
+      const datos = await obtenerDatosExport();
+      if (datos.length === 0) { toast.error('No hay registros para descargar'); return; }
+      const sep = '-'.repeat(70);
+      const lineas = [
+        'EMTRA — Historial de Acciones',
+        `Generado: ${new Date().toLocaleString('es-CO')}`,
+        `Total registros: ${datos.length}`,
+        '='.repeat(70), '',
+        ...datos.flatMap(item => [
+          `Fecha:    ${new Date(item.fecha).toLocaleString('es-CO')}`,
+          `Usuario:  ${item.usuario_nombre || '-'} (${item.usuario_rol || '-'})`,
+          `Acción:   ${getNombreAccion(item.accion)}`,
+          `Equipo:   ${item.equipo_nombre || '-'}  |  Código: ${item.equipo_codigo || '-'}`,
+          `Detalles: ${item.detalles || '-'}`,
+          `IP:       ${item.ip_address || '-'}`,
+          sep, '',
+        ]),
+      ];
+      const blob = new Blob([lineas.join('\n')], { type: 'text/plain;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `historial_${new Date().toISOString().split('T')[0]}.txt`;
+      a.click(); URL.revokeObjectURL(url);
+      toast.success('TXT descargado');
+    } catch { toast.error('Error al generar el TXT'); }
   };
 
   const descargarPDF = async () => {
@@ -93,9 +150,6 @@ function Historial() {
         const map = {
           'CREAR':                 [16, 185, 129],
           'EDITAR':                [59, 130, 246],
-          'ELIMINAR':              [245, 158, 11],
-          'RESTAURAR':             [139, 92, 246],
-          'ELIMINAR_PERMANENTE':   [239, 68, 68],
           'MANTENIMIENTO_CREAR':   [14, 165, 233],
           'MANTENIMIENTO_EDITAR':  [14, 165, 233],
           'MANTENIMIENTO_ELIMINAR':[245, 158, 11],
@@ -225,13 +279,17 @@ function Historial() {
           <h1 style={styles.title}>Historial de Acciones</h1>
           <p style={styles.subtitle}>Registro de todas las acciones del sistema</p>
         </div>
-        <button
-          onClick={descargarPDF}
-          disabled={generandoPDF || historial.length === 0}
-          style={styles.pdfButton}
-        >
-          Descargar PDF
-        </button>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          <button onClick={descargarPDF} disabled={generandoPDF || historial.length === 0} style={styles.pdfButton}>
+            {generandoPDF ? 'Generando...' : '↓ PDF'}
+          </button>
+          <button onClick={descargarCSV} disabled={historial.length === 0} style={styles.csvButton}>
+            ↓ CSV
+          </button>
+          <button onClick={descargarTXT} disabled={historial.length === 0} style={styles.txtButton}>
+            ↓ TXT
+          </button>
+        </div>
       </div>
 
       {/* Filtros */}
@@ -247,9 +305,6 @@ function Historial() {
               <option value="todos">Todas</option>
               <option value="CREAR">Creación</option>
               <option value="EDITAR">Edición</option>
-              <option value="ELIMINAR">Papelera</option>
-              <option value="RESTAURAR">Restauración</option>
-              <option value="ELIMINAR_PERMANENTE">Eliminación permanente</option>
               <option value="MANTENIMIENTO_CREAR">Mantenimiento registrado</option>
               <option value="MANTENIMIENTO_EDITAR">Mantenimiento editado</option>
               <option value="MANTENIMIENTO_ELIMINAR">Mantenimiento eliminado</option>
@@ -468,7 +523,28 @@ const styles = {
     cursor: 'pointer',
     fontSize: '14px',
     whiteSpace: 'nowrap',
-    alignSelf: 'flex-start',
+  },
+  csvButton: {
+    backgroundColor: '#16a34a',
+    color: 'white',
+    fontWeight: '600',
+    padding: '9px 20px',
+    borderRadius: '8px',
+    border: 'none',
+    cursor: 'pointer',
+    fontSize: '14px',
+    whiteSpace: 'nowrap',
+  },
+  txtButton: {
+    backgroundColor: '#4b5563',
+    color: 'white',
+    fontWeight: '600',
+    padding: '9px 20px',
+    borderRadius: '8px',
+    border: 'none',
+    cursor: 'pointer',
+    fontSize: '14px',
+    whiteSpace: 'nowrap',
   },
   overlay: {
     position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)',

@@ -48,11 +48,11 @@ function GestionDashboard() {
 
   const garantiasAlerta = lista.filter(eq => {
     if (!eq.garantia) return false;
-    const g = calcularGarantia(eq.fecha_asignacion || eq.created_at, eq.garantia);
+    const g = calcularGarantia(eq.fecha_garantia, eq.garantia);
     return g.tiene && (g.estado === 'critica' || g.estado === 'proxima');
   }).sort((a, b) => {
-    const ga = calcularGarantia(a.fecha_asignacion || a.created_at, a.garantia);
-    const gb = calcularGarantia(b.fecha_asignacion || b.created_at, b.garantia);
+    const ga = calcularGarantia(a.fecha_garantia, a.garantia);
+    const gb = calcularGarantia(b.fecha_garantia, b.garantia);
     return ga.diasTotales - gb.diasTotales;
   }).slice(0, 5);
 
@@ -247,7 +247,7 @@ function GestionDashboard() {
           </div>
           <div style={{display:'flex',flexDirection:'column',gap:'8px',marginTop:'8px'}}>
             {garantiasAlerta.map(eq => {
-              const g = calcularGarantia(eq.fecha_asignacion || eq.created_at, eq.garantia);
+              const g = calcularGarantia(eq.fecha_garantia, eq.garantia);
               const critica = g.estado === 'critica';
               return (
                 <div key={eq.id} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'10px 14px',background: critica ? '#fef2f2' : '#fffbeb',borderRadius:'8px',border:`1px solid ${critica ? '#fecaca' : '#fde68a'}`}}>
@@ -293,7 +293,7 @@ function GestionDashboard() {
                     <tr key={eq.id}>
                       <td className="gd-code">{eq.codigo || '-'}</td>
                       <td>{eq.nombre_equipo || '-'}</td>
-                      <td className="gd-muted">{eq.tipo || '-'}</td>
+                      <td className="gd-muted">{eq.tipo_nombre || '-'}</td>
                       <td>
                         <span className="gd-badge" style={s}>{eq.estado || '-'}</span>
                       </td>

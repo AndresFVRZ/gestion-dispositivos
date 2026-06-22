@@ -146,7 +146,7 @@ router.get('/', async (req, res) => {
       id: u.id,
       nombre: u.nombre,
       email: u.email,
-      rol: u.rol || 'visualizador',
+      rol: u.rol || 'financiera',
       estado: u.estado,
       empresas: u.empresas || [],
       empresas_ids: (u.empresas || []).map(e => e.id)
@@ -173,7 +173,7 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ success: false, message: 'El email ya está registrado' });
     }
 
-    const rolNombre = rol || 'visualizador';
+    const rolNombre = rol || 'financiera';
     const rolResult = await db.query('SELECT id FROM roles WHERE nombre = $1', [rolNombre]);
     if (rolResult.rows.length === 0) {
       return res.status(400).json({ success: false, message: `Rol "${rolNombre}" no existe` });
@@ -192,8 +192,8 @@ router.post('/', async (req, res) => {
 
     const userId = result.rows[0].id;
 
-    if (rolNombre === 'visualizador' && empresas_ids && empresas_ids.length > 1)
-      return res.status(400).json({ success: false, message: 'El rol Visualizador solo puede tener una empresa asignada' });
+    if (rolNombre === 'financiera' && empresas_ids && empresas_ids.length > 1)
+      return res.status(400).json({ success: false, message: 'El rol Financiera solo puede tener una empresa asignada' });
 
     if (empresas_ids && empresas_ids.length > 0 && rolNombre !== 'super_admin') {
       for (const empresaId of empresas_ids) {
@@ -249,7 +249,7 @@ router.put('/:id', async (req, res) => {
   const { nombre, email, password, rol, empresas_ids } = req.body;
 
   try {
-    const rolNombre = rol || 'visualizador';
+    const rolNombre = rol || 'financiera';
     const rolResult = await db.query('SELECT id FROM roles WHERE nombre = $1', [rolNombre]);
     if (rolResult.rows.length === 0) {
       return res.status(400).json({ success: false, message: `Rol "${rolNombre}" no existe` });
@@ -270,8 +270,8 @@ router.put('/:id', async (req, res) => {
     }
 
     if (empresas_ids !== undefined) {
-      if (rolNombre === 'visualizador' && empresas_ids.length > 1)
-        return res.status(400).json({ success: false, message: 'El rol Visualizador solo puede tener una empresa asignada' });
+      if (rolNombre === 'financiera' && empresas_ids.length > 1)
+        return res.status(400).json({ success: false, message: 'El rol Financiera solo puede tener una empresa asignada' });
 
       await db.query('DELETE FROM usuario_empresas WHERE usuario_id = $1', [id]);
       if (rolNombre !== 'super_admin' && empresas_ids.length > 0) {

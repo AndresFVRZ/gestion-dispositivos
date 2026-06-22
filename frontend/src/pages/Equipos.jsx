@@ -3,7 +3,7 @@
 // ==========================================
 import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
-import { getEquipos, eliminarEquipo, crearEquipo, actualizarEquipo, getEquipoById, reasignarPerifericos } from '../services/equiposService';
+import { getEquipos, crearEquipo, actualizarEquipo, getEquipoById, reasignarPerifericos } from '../services/equiposService';
 import { getEmpresas, getEmpresasParaPrestamo } from '../services/empresasService';
 import { getSedes } from '../services/sedesService';
 import { getProcesos } from '../services/procesosService';
@@ -40,11 +40,7 @@ function Equipos() {
   
   const [mostrarModalDetalle, setMostrarModalDetalle] = useState(false);
   const [equipoDetalle, setEquipoDetalle] = useState(null);
-  const [cargandoOperacion, setCargandoOperacion] = useState(false);
-  const [empresaFiltro, setEmpresaFiltro] = useState(null); // null = todas
-  const [mensajeOperacion, setMensajeOperacion] = useState('');
-  const [modoSeleccion, setModoSeleccion] = useState(false);
-  const [seleccionados, setSeleccionados] = useState([]);
+  const [empresaFiltro, setEmpresaFiltro] = useState(null);
   const [perifericos, setPerifericos] = useState([]);
   const [garantiaValor, setGarantiaValor] = useState('');
   const [garantiaUnidad, setGarantiaUnidad] = useState('meses');
@@ -58,24 +54,39 @@ function Equipos() {
   const [reasignarDestino, setReasignarDestino] = useState('');
   const [reasignarSel, setReasignarSel] = useState([]);
   const [cargandoReasignar, setCargandoReasignar] = useState(false);
+  const [pasoActual, setPasoActual] = useState(1);
+  const [modalAsignar, setModalAsignar] = useState(null); // { equipo }
+  const [formAsignar, setFormAsignar] = useState({ proceso_id: '', asignado_a: '' });
+  const [modalBaja, setModalBaja] = useState(null);       // { equipo }
+  const [formBaja, setFormBaja] = useState({ estado: 'Baja', observaciones: '' });
 
-  const esSuperAdmin = usuario?.rol === 'super_admin';
-  const puedeEditar = usuario?.rol === 'super_admin' || usuario?.rol === 'gestion';
-  const puedeEliminar = usuario?.rol === 'super_admin';
+  const esSuperAdmin  = usuario?.rol === 'super_admin';
+  const esGerencia    = usuario?.rol === 'gerencia';
+  const esSoporte     = usuario?.rol === 'soporte';
+
+  const puedeCrear          = ['super_admin', 'administrador', 'logistica'].includes(usuario?.rol);
+  const puedeEditarCompleto = puedeCrear;
+  const puedeGestionarBaja  = esSuperAdmin || esGerencia;
+  const puedeAsignarProceso = esSuperAdmin; // solo super_admin en el wizard; soporte usa mini modal
+  const puedeEditar = puedeCrear;
 
   const [formData, setFormData] = useState({
     nombre_equipo: '', tipo_id: '', marca: '', modelo: '',
     serial: '', estado: 'Disponible', ubicacion: '', piso: '', modulo: '', asignado_a: '',
-    fecha_asignacion: '', procesador: '', ram: '', disco_duro: '',
+    fecha_garantia: '', procesador: '', ram: '', disco_duro: '',
     sistema_operativo: '', garantia: '', especificaciones: '',
     observaciones: '', empresa_id: '', numero_placa: '', proceso_id: ''
   });
 
-  const estados = ['Disponible', 'Asignado', 'Préstamo', 'Mantenimiento', 'Dañado', 'Obsoleto', 'Baja'];
+  const estados = ['Disponible', 'Asignado', 'Préstamo', 'Mantenimiento', 'Dañado', 'Obsoleto', 'Baja', 'Canibalizar'];
+  // En el formulario, solo gerencia/super_admin pueden seleccionar Baja o Canibalizar
+  const estadosFormulario = puedeGestionarBaja
+    ? estados
+    : estados.filter(s => !['Baja', 'Canibalizar'].includes(s));
 
   // Normaliza los campos de texto a mayúsculas antes de enviar al API
   const CAMPOS_NO_UPPER = new Set(['empresa_id', 'tipo_id', 'proceso_id', 'prestado_a_empresa_id',
-    'sede', 'fecha_asignacion', 'garantia', 'estado']);
+    'sede', 'fecha_garantia', 'garantia', 'estado']);
   const normalizeFormData = (data) =>
     Object.fromEntries(Object.entries(data).map(([k, v]) =>
       [k, typeof v === 'string' && !CAMPOS_NO_UPPER.has(k) ? v.toUpperCase() : v]
@@ -110,15 +121,16 @@ function Equipos() {
     setFormData({
       nombre_equipo: '', tipo_id: '', marca: '', modelo: '',
       serial: '', estado: 'Disponible', ubicacion: '', piso: '', modulo: '', asignado_a: '',
-      fecha_asignacion: '', procesador: '', ram: '', disco_duro: '',
+      fecha_garantia: '', procesador: '', ram: '', disco_duro: '',
       sistema_operativo: '', garantia: '', especificaciones: '',
-      observaciones: '', empresa_id: '', numero_placa: '', sede: '', prestado_a_empresa_id: '', proceso_id: ''
+      observaciones: '', empresa_id: empresaFiltro ? String(empresaFiltro) : (!esSuperAdmin && empresas.length === 1 ? String(empresas[0].id) : ''), numero_placa: '', sede: '', prestado_a_empresa_id: '', proceso_id: ''
     });
     setPerifericos([]);
     setGarantiaValor('');
     setGarantiaUnidad('meses');
     setBusquedaSede('');
     setErrorForm('');
+    setPasoActual(1);
     setMostrarModal(true);
   };
 
@@ -130,7 +142,8 @@ function Equipos() {
       modelo: equipo.modelo || '', serial: equipo.serial || '',
       estado: equipo.estado || 'Disponible', ubicacion: equipo.ubicacion || '',
       piso: equipo.piso || '', modulo: equipo.modulo || '',
-      asignado_a: equipo.asignado_a || '', fecha_asignacion: equipo.fecha_asignacion || '',
+      asignado_a: equipo.asignado_a || '',
+      fecha_garantia: equipo.fecha_garantia ? equipo.fecha_garantia.split('T')[0] : '',
       procesador: equipo.procesador || '', ram: equipo.ram || '',
       disco_duro: equipo.disco_duro || '', sistema_operativo: equipo.sistema_operativo || '',
       garantia: equipo.garantia || '', especificaciones: equipo.especificaciones || '',
@@ -157,6 +170,7 @@ function Equipos() {
     setGarantiaValor(disp.valor ? String(disp.valor) : '');
     setGarantiaUnidad(disp.unidad);
     setErrorForm('');
+    setPasoActual(1);
     setMostrarModal(true);
   };
 
@@ -165,8 +179,51 @@ function Equipos() {
     setMostrarModalDetalle(true);
   };
 
+  const abrirModalAsignar = (equipo) => {
+    setFormAsignar({ proceso_id: equipo.proceso_id || '', asignado_a: equipo.asignado_a || '' });
+    setModalAsignar({ equipo });
+  };
+
+  const handleGuardarAsignacion = async () => {
+    setCargandoForm(true);
+    try {
+      const payload = { ...modalAsignar.equipo, proceso_id: formAsignar.proceso_id, asignado_a: formAsignar.asignado_a };
+      const result = await actualizarEquipo(modalAsignar.equipo.id, payload);
+      if (result.success) {
+        setModalAsignar(null);
+        toast.success('Asignación actualizada');
+        cargarDatos();
+      } else {
+        toast.error(result.message || 'Error al guardar');
+      }
+    } catch { toast.error('Error de conexión'); }
+    finally { setCargandoForm(false); }
+  };
+
+  const abrirModalBaja = (equipo) => {
+    setFormBaja({ estado: 'Baja', observaciones: '' });
+    setModalBaja({ equipo });
+  };
+
+  const handleGuardarBaja = async () => {
+    if (!formBaja.observaciones.trim()) { toast.error('Las observaciones son obligatorias'); return; }
+    setCargandoForm(true);
+    try {
+      const payload = { ...modalBaja.equipo, estado: formBaja.estado, observaciones: formBaja.observaciones };
+      const result = await actualizarEquipo(modalBaja.equipo.id, payload);
+      if (result.success) {
+        setModalBaja(null);
+        toast.success(`Equipo marcado como ${formBaja.estado}`);
+        cargarDatos();
+      } else {
+        toast.error(result.message || 'Error al guardar');
+      }
+    } catch { toast.error('Error de conexión'); }
+    finally { setCargandoForm(false); }
+  };
+
   const handleSubmit = async (e) => {
-    e.preventDefault();
+    e?.preventDefault();
     setCargandoForm(true);
     setErrorForm('');
 
@@ -212,66 +269,22 @@ function Equipos() {
     }
   };
 
-  const handleEliminar = (equipo) => {
-    setConfirm({
-      titulo: 'Mover a papelera',
-      mensaje: `¿Estás seguro de mover "${equipo.nombre_equipo}" a la papelera?`,
-      variante: 'warning',
-      textConfirmar: 'Mover a papelera',
-      onConfirm: async () => {
-        setConfirm(null);
-        try {
-          const result = await eliminarEquipo(equipo.id);
-          if (result.success) { toast.success('Equipo movido a la papelera'); cargarDatos(); }
-          else toast.error(result.message || 'Error al eliminar');
-        } catch { toast.error('Error de conexión'); }
-      },
-    });
-  };
-
-  const toggleModoSeleccion = () => {
-    setModoSeleccion(v => !v);
-    setSeleccionados([]);
-  };
-
-  const toggleSeleccion = (id) => {
-    setSeleccionados(prev =>
-      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
-    );
-  };
-
-  const toggleSeleccionarTodos = () => {
-    if (seleccionados.length === equiposPaginados.length) {
-      setSeleccionados([]);
-    } else {
-      setSeleccionados(equiposPaginados.map(e => e.id));
+  const handleSiguiente = () => {
+    setErrorForm('');
+    if (pasoActual === 1) {
+      if (!formData.nombre_equipo.trim()) return setErrorForm('El nombre del equipo es obligatorio.');
+      if (!formData.modelo.trim()) return setErrorForm('El modelo es obligatorio.');
+      if (!formData.serial.trim()) return setErrorForm('El serial es obligatorio.');
     }
+    if (pasoActual === 3) {
+      if (!formData.procesador.trim()) return setErrorForm('El procesador es obligatorio.');
+      if (!formData.ram.trim()) return setErrorForm('La RAM es obligatoria.');
+      if (!formData.disco_duro.trim()) return setErrorForm('El disco duro es obligatorio.');
+      if (!formData.sistema_operativo.trim()) return setErrorForm('El sistema operativo es obligatorio.');
+    }
+    setPasoActual(p => p + 1);
   };
 
-  const handleEliminarSeleccionados = () => {
-    if (seleccionados.length === 0) return;
-    setConfirm({
-      titulo: 'Eliminar seleccionados',
-      mensaje: `¿Mover ${seleccionados.length} equipo(s) seleccionado(s) a la papelera?`,
-      variante: 'danger',
-      textConfirmar: `Mover ${seleccionados.length} a papelera`,
-      onConfirm: async () => {
-        setConfirm(null);
-        setCargandoOperacion(true);
-        let eliminados = 0;
-        for (let i = 0; i < seleccionados.length; i++) {
-          setMensajeOperacion(`Eliminando ${i + 1} de ${seleccionados.length}...`);
-          try { await eliminarEquipo(seleccionados[i]); eliminados++; } catch (_) {}
-        }
-        setCargandoOperacion(false);
-        setMensajeOperacion('');
-        setSeleccionados([]);
-        setModoSeleccion(false);
-        toast.success(`${eliminados} equipo(s) movidos a la papelera`);
-        cargarDatos();
-      },
-    });
-  };
 
   const handleImportExcel = async (event) => {
     const file = event.target.files[0];
@@ -348,6 +361,7 @@ function Equipos() {
         const normKey = (s) =>
           s.toLowerCase().trim()
            .normalize('NFD').replace(/[̀-ͯ]/g, '')
+           .replace(/_/g, ' ')
            .replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ');
 
         const normEmp = normKey;
@@ -433,15 +447,31 @@ function Equipos() {
             const procesador = [proc, velocidad].filter(Boolean).join(' ');
 
             // disco = DD + TECNOLOGIA
-            const dd   = g('dd', 'disco duro', 'disco', 'almacenamiento');
-            const tech = g('tecnologia', 'tecnología');
+            const dd   = g('dd', 'disco duro', 'disco', 'almacenamiento',
+                           'hdd', 'ssd', 'hard disk', 'hard drive', 'storage',
+                           'capacidad', 'capacidad disco', 'capacidad almacenamiento',
+                           'capacidad de almacenamiento', 'disco rigido', 'disco rígido');
+            const tech = g('tecnologia', 'tecnología', 'tipo disco', 'tipo almacenamiento');
             const disco_duro = [dd, tech].filter(Boolean).join(' ');
 
             const ram       = g('ram', 'memoria');
             const garantia  = g('garantia', 'garantía');
             const asignado_a = g('usuario pc', 'usuario', 'asignado a', 'asignado_a', 'encargado');
-            const fecha_asignacion = g('fecha', 'fecha asignacion', 'fecha instalacion') || null;
+            const fecha_garantia_imp = g('fecha garantia', 'fecha_garantia') || null;
             const sede_nombre = g('sede');
+
+            // proceso
+            const procesoNombre = g('proceso', 'proceso_area', 'area proceso', 'área proceso');
+            const procesoEncontrado = procesoNombre
+              ? procesos.find(p =>
+                  String(p.empresa_id) === String(empresaEncontrada.id) &&
+                  p.nombre.toLowerCase().trim() === procesoNombre.toLowerCase().trim()
+                ) || procesos.find(p =>
+                  String(p.empresa_id) === String(empresaEncontrada.id) &&
+                  p.nombre.toLowerCase().includes(procesoNombre.toLowerCase().trim())
+                )
+              : null;
+            const proceso_id = procesoEncontrado?.id || null;
 
             // estado
             let estado = g('estado', 'de baja') || 'Disponible';
@@ -468,8 +498,10 @@ function Equipos() {
               estado, ubicacion, piso: piso || null, modulo: modulo || null,
               asignado_a, procesador, ram,
               disco_duro, sistema_operativo, garantia,
-              fecha_asignacion: fecha_asignacion || null,
+              fecha_garantia: fecha_garantia_imp || null,
               numero_placa: numero_placa || null,
+              sede: sede_nombre || null,
+              proceso_id: proceso_id || null,
               empresa_id: empresaEncontrada.id,
               perifericos,
               es_importacion: true,
@@ -579,52 +611,20 @@ function Equipos() {
         {...importModal}
         onCerrar={() => setImportModal({ estado: 'idle', progreso: 0, total: 0, importados: 0, errores: [] })}
       />
-      {cargandoOperacion && (
-        <div className="loading-overlay">
-          <div className="loading-box">
-            <div className="loading-spinner" />
-            <p className="loading-msg">{mensajeOperacion}</p>
-          </div>
-        </div>
-      )}
       <div className="equipos-header">
         <div className="equipos-title-section">
           <h1>Equipos</h1>
           <p>Gestión de equipos tecnológicos</p>
         </div>
-        {puedeEditar && (
+        {puedeCrear && (
           <div className="equipos-actions">
             <label className="btn-secondary">Importar Excel<input type="file" accept=".xlsx,.xls,.csv" onChange={handleImportExcel} style={{display:'none'}} /></label>
             <button className="btn-secondary" onClick={handleExportExcel}>Exportar Excel</button>
-            {puedeEliminar && (
-              <button
-                className={modoSeleccion ? 'btn-seleccion-activa' : 'btn-secondary'}
-                onClick={toggleModoSeleccion}
-              >
-                {modoSeleccion ? 'Cancelar selección' : 'Selección múltiple'}
-              </button>
-            )}
             <button className="btn-primary" onClick={abrirModalCrear}>Agregar</button>
           </div>
         )}
       </div>
 
-      {modoSeleccion && (
-        <div className="barra-seleccion">
-          <span className="seleccion-info">
-            {seleccionados.length === 0
-              ? 'Selecciona los equipos que deseas eliminar'
-              : `${seleccionados.length} equipo(s) seleccionado(s)`}
-          </span>
-          <button
-            className="btn-eliminar-masivo"
-            onClick={handleEliminarSeleccionados}
-            disabled={seleccionados.length === 0}
-          >
-            Mover a papelera ({seleccionados.length})
-          </button>
-        </div>
-      )}
 
 
       {/* Selector de empresa — visible solo si hay más de una */}
@@ -706,16 +706,6 @@ function Equipos() {
           <table className="data-table">
             <thead>
               <tr>
-                {modoSeleccion && (
-                  <th className="th-checkbox">
-                    <input
-                      type="checkbox"
-                      checked={equiposPaginados.length > 0 && seleccionados.length === equiposPaginados.length}
-                      onChange={toggleSeleccionarTodos}
-                      className="checkbox-tabla"
-                    />
-                  </th>
-                )}
                 {esSuperAdmin && <th>Empresa</th>}
                 <th>Equipo</th>
                 <th>Tipo</th>
@@ -729,33 +719,15 @@ function Equipos() {
             <tbody>
               {equiposPaginados.length === 0 ? (
                 <tr>
-                  <td colSpan={
-                    (modoSeleccion ? 1 : 0) + (esSuperAdmin ? 1 : 0) + 7
-                  } className="empty-cell">
+                  <td colSpan={(esSuperAdmin ? 1 : 0) + 7} className="empty-cell">
                     No hay equipos registrados
                   </td>
                 </tr>
               ) : (
                 equiposPaginados.map(e => {
                   const empresa = empresas.find(emp => emp.id === e.empresa_id);
-                  const seleccionado = seleccionados.includes(e.id);
                   return (
-                    <tr
-                      key={e.id}
-                      className={seleccionado ? 'fila-seleccionada' : ''}
-                      onClick={modoSeleccion ? () => toggleSeleccion(e.id) : undefined}
-                      style={modoSeleccion ? { cursor: 'pointer' } : {}}
-                    >
-                      {modoSeleccion && (
-                        <td className="td-checkbox" onClick={ev => ev.stopPropagation()}>
-                          <input
-                            type="checkbox"
-                            checked={seleccionado}
-                            onChange={() => toggleSeleccion(e.id)}
-                            className="checkbox-tabla"
-                          />
-                        </td>
-                      )}
+                    <tr key={e.id}>
                       {esSuperAdmin && <td className="empresa-cell">{empresa?.nombre || '-'}</td>}
                       <td className="equipo-cell">{e.nombre_equipo || '-'}</td>
                       <td>{e.tipo_nombre || '-'}</td>
@@ -784,21 +756,25 @@ function Equipos() {
                         })()}
                       </td>
                       <td>{(() => {
-                        const g = calcularGarantia(e.fecha_asignacion, e.garantia);
-                        if (!g.tiene) return <span style={{ color: '#94a3b8', fontSize: '11px' }}>-</span>;
-                        const c = colorGarantia(g.estado);
-                        return (
-                          <span style={{ background: c.bg, color: c.color, border: `1px solid ${c.border}`, borderRadius: '6px', padding: '2px 7px', fontSize: '11px', fontWeight: '500', whiteSpace: 'nowrap' }}>
-                            {g.vencida ? 'Vencida' : textoGarantia(g)}
-                          </span>
-                        );
+                        if (!e.fecha_garantia || !e.garantia) return <span style={{ color: '#94a3b8', fontSize: '11px' }}>N/A</span>;
+                        const inicio = new Date(e.fecha_garantia); inicio.setHours(0,0,0,0);
+                        const fin = new Date(inicio); fin.setDate(fin.getDate() + parseInt(e.garantia));
+                        const hoy = new Date(); hoy.setHours(0,0,0,0);
+                        if (fin <= hoy) return <span style={{ color: '#64748b', fontSize: '11px', fontWeight: '500' }}>Vencida</span>;
+                        const dias = Math.ceil((fin - hoy) / (1000*60*60*24));
+                        const c = dias <= 30 ? {bg:'#fef2f2',color:'#dc2626',border:'#fecaca'} : dias <= 180 ? {bg:'#fffbeb',color:'#b45309',border:'#fde68a'} : {bg:'#f0fdf4',color:'#15803d',border:'#bbf7d0'};
+                        const texto = fin.toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' });
+                        return <span style={{ background: c.bg, color: c.color, border: `1px solid ${c.border}`, borderRadius: '6px', padding: '2px 7px', fontSize: '11px', fontWeight: '500', whiteSpace: 'nowrap' }}>{texto}</span>;
                       })()}</td>
                       <td>{e.asignado_a || '-'}</td>
                       <td>{e.proceso_nombre || '-'}</td>
                       <td className="acciones-cell">
                         <button className="btn-view" onClick={() => verDetalleEquipo(e)}>Ver</button>
-                        {puedeEditar && !modoSeleccion && <button className="btn-edit" onClick={() => abrirModalEditar(e)}>Editar</button>}
-                        {puedeEliminar && !modoSeleccion && <button className="btn-delete" onClick={() => handleEliminar(e)}>Eliminar</button>}
+                        {puedeEditarCompleto && <button className="btn-edit" onClick={() => abrirModalEditar(e)}>Editar</button>}
+                        {esSoporte && <button className="btn-edit" onClick={() => abrirModalAsignar(e)}>Asignar</button>}
+                        {esGerencia && !['Baja','Canibalizar'].includes(e.estado) && (
+                          <button className="btn-baja" onClick={() => abrirModalBaja(e)}>Baja</button>
+                        )}
                       </td>
                     </tr>
                   );
@@ -833,6 +809,80 @@ function Equipos() {
           </div>
         )}
       </div>
+
+      {/* Modal soporte: asignar proceso y persona */}
+      {modalAsignar && (
+        <div className="modal-overlay" onClick={() => setModalAsignar(null)}>
+          <div className="modal-content" style={{maxWidth:'420px'}} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Asignar equipo</h2>
+              <button className="modal-close" onClick={() => setModalAsignar(null)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <p style={{fontSize:'13px',color:'#475569',marginBottom:'16px'}}>
+                <strong>{modalAsignar.equipo.nombre_equipo}</strong>
+              </p>
+              <div className="form-grid">
+                <div className="form-group opc">
+                  <label>Proceso / Área</label>
+                  <select value={formAsignar.proceso_id} onChange={e => setFormAsignar(p => ({...p, proceso_id: e.target.value}))}>
+                    <option value="">Sin proceso</option>
+                    {procesosFiltrados.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                  </select>
+                </div>
+                <div className="form-group opc">
+                  <label>Asignado a</label>
+                  <input type="text" value={formAsignar.asignado_a} onChange={e => setFormAsignar(p => ({...p, asignado_a: e.target.value}))} placeholder="Nombre de la persona..." />
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn-cancel" onClick={() => setModalAsignar(null)}>Cancelar</button>
+              <button className="btn-save" disabled={cargandoForm} onClick={handleGuardarAsignacion}>
+                {cargandoForm ? 'Guardando...' : 'Guardar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal gerencia: Baja / Canibalizar */}
+      {modalBaja && (
+        <div className="modal-overlay" onClick={() => setModalBaja(null)}>
+          <div className="modal-content" style={{maxWidth:'420px'}} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Cambiar estado del equipo</h2>
+              <button className="modal-close" onClick={() => setModalBaja(null)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <p style={{fontSize:'13px',color:'#475569',marginBottom:'16px'}}>
+                <strong>{modalBaja.equipo.nombre_equipo}</strong>
+                {modalBaja.equipo.serial && <span style={{color:'#94a3b8',marginLeft:'8px'}}>{modalBaja.equipo.serial}</span>}
+              </p>
+              <div className="form-grid">
+                <div className="form-group req">
+                  <label>Estado</label>
+                  <select value={formBaja.estado} onChange={e => setFormBaja(p => ({...p, estado: e.target.value}))}>
+                    <option value="Baja">Baja</option>
+                    <option value="Canibalizar">Canibalizar (Retiro de piezas)</option>
+                  </select>
+                </div>
+                <div className="form-group req" style={{gridColumn:'1/-1'}}>
+                  <label>Observaciones <span style={{color:'#ef4444'}}>*</span></label>
+                  <textarea rows={3} value={formBaja.observaciones} onChange={e => setFormBaja(p => ({...p, observaciones: e.target.value}))}
+                    placeholder="Motivo de baja o retiro de piezas..." />
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn-cancel" onClick={() => setModalBaja(null)}>Cancelar</button>
+              <button className="btn-save" style={{background:'#dc2626'}} disabled={cargandoForm || !formBaja.observaciones.trim()} onClick={handleGuardarBaja}>
+                {cargandoForm ? 'Guardando...' : `Confirmar ${formBaja.estado}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal de reasignación de periféricos */}
       {modalReasignar && (
@@ -923,237 +973,260 @@ function Equipos() {
               <h2>{equipoEditando ? 'Editar Equipo' : 'Agregar Equipo'}</h2>
               <button className="modal-close" onClick={() => setMostrarModal(false)}>✕</button>
             </div>
+
+            {/* Indicador de pasos */}
+            <div className="stepper">
+              {[{n:1,label:'Identificación'},{n:2,label:'Ubicación'},{n:3,label:'Especificaciones'},{n:4,label:'Periféricos'}].map(({n, label}) => (
+                <div key={n} className={`stepper-item${pasoActual === n ? ' active' : ''}${pasoActual > n ? ' done' : ''}`}>
+                  <div className="stepper-circle">{pasoActual > n ? '✓' : n}</div>
+                  <span className="stepper-label">{label}</span>
+                </div>
+              ))}
+            </div>
+
             {errorForm && <div className="modal-error">{errorForm}</div>}
-            <form onSubmit={handleSubmit}>
+            <form onSubmit={handleSubmit} onKeyDown={e => { if (e.key === 'Enter' && e.target.tagName === 'INPUT') e.preventDefault(); }}>
               <div className="modal-body">
-                <div className="form-grid">
-                  {esSuperAdmin && (
-                    <div className="form-group req">
-                      <label>Empresa</label>
-                      <select value={formData.empresa_id} onChange={e => setFormData({...formData, empresa_id: e.target.value, sede: '', proceso_id: ''})}>
-                        <option value="">Seleccionar</option>
-                        {empresas.map(emp => <option key={emp.id} value={emp.id}>{emp.nombre}</option>)}
-                      </select>
-                    </div>
-                  )}
-                  <div className="form-group opc">
-                    <label>Sede</label>
-                    <div style={{ position: 'relative' }}>
-                      <input
-                        type="text"
-                        autoComplete="off"
-                        placeholder={sedeHabilitada ? 'Buscar sede...' : 'Selecciona una empresa primero'}
-                        disabled={!sedeHabilitada}
-                        value={busquedaSede}
-                        onChange={e => {
-                          setBusquedaSede(e.target.value);
-                          setFormData(prev => ({...prev, sede: e.target.value, proceso_id: e.target.value.trim() ? prev.proceso_id : ''}));
-                          setShowDropdownSede(true);
-                        }}
-                        onFocus={() => setShowDropdownSede(true)}
-                        onBlur={() => setTimeout(() => setShowDropdownSede(false), 200)}
-                        style={{ width: '100%', padding: '8px 10px', border: '1px solid #d1dce6', borderRadius: '6px', fontSize: '13px', outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box', opacity: sedeHabilitada ? 1 : 0.45, cursor: sedeHabilitada ? 'text' : 'not-allowed', background: sedeHabilitada ? 'white' : '#f8fafc' }}
-                      />
-                      {showDropdownSede && (
-                        <div style={{ position: 'absolute', top: 'calc(100% + 2px)', left: 0, right: 0, background: 'white', border: '1px solid #d1dce6', borderRadius: '8px', maxHeight: '200px', overflowY: 'auto', zIndex: 9999, boxShadow: '0 6px 20px rgba(0,0,0,0.15)' }}>
-                          {sedesCombo.length === 0 ? (
-                            <div style={{ padding: '10px 14px', color: '#94a3b8', fontSize: '13px', textAlign: 'center' }}>Sin sedes disponibles</div>
-                          ) : sedesCombo.map(s => (
-                            <div
-                              key={s.id}
-                              onMouseDown={() => {
-                                setBusquedaSede(s.nombre);
-                                setFormData(prev => ({...prev, sede: s.nombre}));
-                                setShowDropdownSede(false);
-                              }}
-                              style={{ padding: '9px 14px', cursor: 'pointer', fontSize: '13px', borderBottom: '1px solid #f1f5f9', fontWeight: 500, color: '#1e293b' }}
-                              onMouseEnter={e => e.currentTarget.style.background = '#f0f7ff'}
-                              onMouseLeave={e => e.currentTarget.style.background = 'white'}
-                            >
-                              {s.nombre}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
 
-                  <div className="form-group req"><label>Nombre del equipo</label><input type="text" required value={formData.nombre_equipo} onChange={e => setFormData({...formData, nombre_equipo: e.target.value})} /></div>
-                  <div className="form-group opc">
-                    <label>Tipo de equipo</label>
-                    <select value={formData.tipo_id} onChange={e => setFormData({...formData, tipo_id: e.target.value})}>
-                      <option value="">Sin tipo</option>
-                      {tiposEquipo.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
-                    </select>
-                  </div>
-                  <div className="form-group req">
-                    <label>Estado</label>
-                    {(() => {
-                      const enPrestamo = !!equipoEditando?.prestado_a_empresa_id;
-                      const esSA = usuario?.rol === 'super_admin';
-                      const esGestion = usuario?.rol === 'gestion';
-                      const esDueno = usuario?.empresas?.some(emp => emp.id === equipoEditando?.empresa_id) || usuario?.empresa_id === equipoEditando?.empresa_id;
-                      const bloqueado = enPrestamo && !(esSA || (esGestion && esDueno));
-                      return <>
-                        <select
-                          value={formData.estado}
-                          disabled={bloqueado}
-                          onChange={e => setFormData({...formData, estado: e.target.value, prestado_a_empresa_id: e.target.value !== 'Préstamo' ? '' : formData.prestado_a_empresa_id})}
-                        >
-                          {estados.map(s => <option key={s} value={s}>{s}</option>)}
+                {/* ── Paso 1: Identificación ── */}
+                {pasoActual === 1 && (
+                  <div className="form-grid">
+                    {(esSuperAdmin || empresas.length > 1) && !empresaFiltro && (
+                      <div className="form-group req">
+                        <label>Empresa</label>
+                        <select value={formData.empresa_id} onChange={e => setFormData({...formData, empresa_id: e.target.value, sede: '', proceso_id: ''})}>
+                          <option value="">Seleccionar</option>
+                          {empresas.map(emp => <option key={emp.id} value={emp.id}>{emp.nombre}</option>)}
                         </select>
-                        {bloqueado && (
-                          <span style={{fontSize:'11px',color:'#92400e',marginTop:'4px',display:'block'}}>
-                            Solo la empresa dueña puede cambiar el estado de un equipo en préstamo.
-                          </span>
-                        )}
-                      </>;
-                    })()}
-                  </div>
-                  {(['Dañado', 'Mantenimiento', 'Baja'].includes(formData.estado) || formData.observaciones) && (
-                    <div className="form-group req observaciones-group">
-                      <label className="observaciones-label">
-                        Falla / Observaciones
-                        {['Dañado', 'Mantenimiento', 'Baja'].includes(formData.estado) && (
-                          <span className="observaciones-badge">{formData.estado}</span>
-                        )}
-                      </label>
-                      <textarea
-                        rows={3}
-                        required={['Dañado', 'Mantenimiento', 'Baja'].includes(formData.estado)}
-                        placeholder="Describe la falla o posible falla del equipo..."
-                        value={formData.observaciones}
-                        onChange={e => setFormData({...formData, observaciones: e.target.value})}
-                      />
-                    </div>
-                  )}
-                  {formData.estado === 'Préstamo' && (
-                    <div className="form-group req">
-                      <label>Prestado a empresa</label>
-                      <select value={formData.prestado_a_empresa_id} onChange={e => setFormData({...formData, prestado_a_empresa_id: e.target.value})}>
-                        <option value="">Seleccionar empresa...</option>
-                        {todasEmpresas.filter(e => String(e.id) !== String(formData.empresa_id))
-                          .map(e => <option key={e.id} value={e.id}>{e.nombre}</option>)}
-                      </select>
-                    </div>
-                  )}
-                  <div className="form-group opc">
-                    <label>Marca</label>
-                    <input type="text" list="marcas-lista" placeholder="Escribe o selecciona..."
-                      value={formData.marca} onChange={e => setFormData({...formData, marca: e.target.value})} />
-                    <datalist id="marcas-lista">
-                      {['HP','Dell','Lenovo','Asus','Acer','Apple','Toshiba','Samsung','MSI','Huawei','LG','Sony','Epson','Ricoh','Zebra','Genérico'].map(m => (
-                        <option key={m} value={m} />
-                      ))}
-                    </datalist>
-                  </div>
-                  <div className="form-group opc"><label>Modelo</label><input type="text" value={formData.modelo} onChange={e => setFormData({...formData, modelo: e.target.value})} /></div>
-                  <div className="form-group opc"><label>Serial</label><input type="text" value={formData.serial} onChange={e => setFormData({...formData, serial: e.target.value.toUpperCase()})} style={{textTransform:'uppercase'}} /></div>
-                  <div className="form-group opc">
-                    <label>Proceso</label>
-                    <select
-                      disabled={!procesoHabilitado}
-                      value={formData.proceso_id}
-                      onChange={e => setFormData({...formData, proceso_id: e.target.value})}
-                      style={!procesoHabilitado ? {opacity:0.45, cursor:'not-allowed', background:'#f8fafc'} : {}}
-                    >
-                      <option value="">{procesoHabilitado ? 'Sin proceso' : 'Completa la sede primero'}</option>
-                      {procesosFiltrados.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
-                    </select>
-                  </div>
-                  <div className="form-group opc">
-                    <label>Piso</label>
-                    <input type="text" list="pisos-lista" placeholder="Ej: 1, 2, PB..."
-                      value={formData.piso} onChange={e => setFormData({...formData, piso: e.target.value})} />
-                    <datalist id="pisos-lista">
-                      {pisosDisponibles.map(p => <option key={p} value={p} />)}
-                    </datalist>
-                  </div>
-                  <div className="form-group opc">
-                    <label>Des. Puesto</label>
-                    <input type="text" list="modulos-lista" placeholder="Ej: A, B, 01..."
-                      value={formData.modulo} onChange={e => setFormData({...formData, modulo: e.target.value})} />
-                    <datalist id="modulos-lista">
-                      {modulosDisponibles.map(m => <option key={m} value={m} />)}
-                    </datalist>
-                  </div>
-                  <div className="form-group opc"><label>Asignado a</label><input type="text" value={formData.asignado_a} onChange={e => setFormData({...formData, asignado_a: e.target.value})} /></div>
-                  <div className="form-group opc"><label>Procesador</label><input type="text" value={formData.procesador} onChange={e => setFormData({...formData, procesador: e.target.value})} /></div>
-                  <div className="form-group opc"><label>RAM</label><input type="text" value={formData.ram} onChange={e => setFormData({...formData, ram: e.target.value})} /></div>
-                  <div className="form-group opc"><label>Disco Duro</label><input type="text" value={formData.disco_duro} onChange={e => setFormData({...formData, disco_duro: e.target.value})} /></div>
-                  <div className="form-group opc"><label>Sistema Operativo</label><input type="text" value={formData.sistema_operativo} onChange={e => setFormData({...formData, sistema_operativo: e.target.value})} /></div>
-                  <div className="form-group opc">
-                    <label>Garantía</label>
-                    <div style={{display:'flex', gap:'6px'}}>
-                      <input
-                        type="number" min="1"
-                        placeholder="Ej: 12"
-                        value={garantiaValor}
-                        onChange={e => setGarantiaValor(e.target.value)}
-                        style={{flex:1}}
-                      />
-                      <select
-                        value={garantiaUnidad}
-                        onChange={e => setGarantiaUnidad(e.target.value)}
-                        style={{width:'90px'}}
-                      >
-                        <option value="días">Días</option>
-                        <option value="meses">Meses</option>
-                        <option value="años">Años</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div className="form-group opc"><label>N° de placa</label><input type="text" placeholder="Ej: EMTRA-0042" value={formData.numero_placa} onChange={e => setFormData({...formData, numero_placa: e.target.value.toUpperCase()})} style={{textTransform:'uppercase'}} /></div>
-                </div>
-
-                {/* Periféricos */}
-                <div className="extras-section">
-                  <div className="extras-header">
-                    <span className="extras-title">Periféricos</span>
-                    <button
-                      type="button"
-                      className="btn-agregar-extra"
-                      onClick={() => setPerifericos(prev => [...prev, { tipo_id: '', marca: '', modelo: '', serial: '', descripcion: '' }])}
-                    >
-                      + Agregar
-                    </button>
-                  </div>
-                  {perifericos.length === 0 && (
-                    <p className="extras-vacio">Sin periféricos. Haz clic en "+ Agregar" para añadir.</p>
-                  )}
-                  {perifericos.map((p, idx) => {
-                    const upd = (field, val) => {
-                      const nuevos = [...perifericos];
-                      nuevos[idx] = { ...nuevos[idx], [field]: val };
-                      setPerifericos(nuevos);
-                    };
-                    return (
-                      <div key={idx} className="periferico-card">
-                        <div className="periferico-card-top">
-                          <select
-                            className="extra-select"
-                            value={p.tipo_id || ''}
-                            onChange={e => upd('tipo_id', e.target.value)}
-                          >
-                            <option value="">Sin tipo</option>
-                            {tiposPeriferico.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
-                          </select>
-                          <button type="button" className="extra-btn-remove" onClick={() => setPerifericos(prev => prev.filter((_, i) => i !== idx))}>✕</button>
-                        </div>
-                        <div className="periferico-card-fields">
-                          <input className="extra-input" type="text" placeholder="Marca" value={p.marca || ''} onChange={e => upd('marca', e.target.value)} />
-                          <input className="extra-input" type="text" placeholder="Modelo" value={p.modelo || ''} onChange={e => upd('modelo', e.target.value)} />
-                          <input className="extra-input" type="text" placeholder="Serial" value={p.serial || ''} onChange={e => upd('serial', e.target.value.toUpperCase())} style={{textTransform:'uppercase'}} />
-                          <input className="extra-input periferico-desc" type="text" placeholder="Descripción adicional" value={p.descripcion || ''} onChange={e => upd('descripcion', e.target.value)} />
-                        </div>
                       </div>
-                    );
-                  })}
-                </div>
+                    )}
+                    <div className="form-group req"><label>Nombre del equipo</label><input type="text" value={formData.nombre_equipo} onChange={e => setFormData({...formData, nombre_equipo: e.target.value})} /></div>
+                    <div className="form-group opc">
+                      <label>Tipo de equipo</label>
+                      <select value={formData.tipo_id} onChange={e => setFormData({...formData, tipo_id: e.target.value})}>
+                        <option value="">Sin tipo</option>
+                        {tiposEquipo.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
+                      </select>
+                    </div>
+                    <div className="form-group opc">
+                      <label>Marca</label>
+                      <input type="text" list="marcas-lista" placeholder="Escribe o selecciona..."
+                        value={formData.marca} onChange={e => setFormData({...formData, marca: e.target.value})} />
+                      <datalist id="marcas-lista">
+                        {['HP','Dell','Lenovo','Asus','Acer','Apple','Toshiba','Samsung','MSI','Huawei','LG','Sony','Epson','Ricoh','Zebra','Genérico'].map(m => (
+                          <option key={m} value={m} />
+                        ))}
+                      </datalist>
+                    </div>
+                    <div className="form-group req"><label>Modelo</label><input type="text" value={formData.modelo} onChange={e => setFormData({...formData, modelo: e.target.value})} /></div>
+                    <div className="form-group req"><label>Serial</label><input type="text" value={formData.serial} onChange={e => setFormData({...formData, serial: e.target.value.toUpperCase()})} style={{textTransform:'uppercase'}} /></div>
+                    <div className="form-group opc"><label>N° de placa</label><input type="text" placeholder="Ej: EMTRA-0042" value={formData.numero_placa} onChange={e => setFormData({...formData, numero_placa: e.target.value.toUpperCase()})} style={{textTransform:'uppercase'}} /></div>
+                    <div className="form-group req">
+                      <label>Estado</label>
+                      <select
+                        value={formData.estado}
+                        onChange={e => setFormData({...formData, estado: e.target.value, prestado_a_empresa_id: e.target.value !== 'Préstamo' ? '' : formData.prestado_a_empresa_id})}
+                      >
+                        {estadosFormulario.map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    </div>
+                    {formData.estado === 'Préstamo' && (
+                      <div className="form-group req">
+                        <label>Prestado a empresa</label>
+                        <select value={formData.prestado_a_empresa_id} onChange={e => setFormData({...formData, prestado_a_empresa_id: e.target.value})}>
+                          <option value="">Seleccionar empresa...</option>
+                          {todasEmpresas.filter(e => String(e.id) !== String(formData.empresa_id)).map(e => <option key={e.id} value={e.id}>{e.nombre}</option>)}
+                        </select>
+                      </div>
+                    )}
+                    {(['Dañado', 'Mantenimiento', 'Baja', 'Canibalizar'].includes(formData.estado) || formData.observaciones) && (
+                      <div className="form-group req observaciones-group">
+                        <label className="observaciones-label">
+                          Falla / Observaciones
+                          {['Dañado', 'Mantenimiento', 'Baja', 'Canibalizar'].includes(formData.estado) && <span className="observaciones-badge">{formData.estado}</span>}
+                        </label>
+                        <textarea rows={3} required={['Dañado', 'Mantenimiento', 'Baja', 'Canibalizar'].includes(formData.estado)}
+                          placeholder="Describe la falla o posible falla del equipo..."
+                          value={formData.observaciones} onChange={e => setFormData({...formData, observaciones: e.target.value})} />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* ── Paso 2: Ubicación ── */}
+                {pasoActual === 2 && (
+                  <div className="form-grid">
+                    <div className="form-group opc">
+                      <label>Sede</label>
+                      <div style={{ position: 'relative' }}>
+                        <input
+                          type="text" autoComplete="off"
+                          placeholder={sedeHabilitada ? 'Buscar sede...' : 'Selecciona una empresa primero'}
+                          disabled={!sedeHabilitada}
+                          value={busquedaSede}
+                          onChange={e => {
+                            setBusquedaSede(e.target.value);
+                            setFormData(prev => ({...prev, sede: e.target.value, proceso_id: e.target.value.trim() ? prev.proceso_id : ''}));
+                            setShowDropdownSede(true);
+                          }}
+                          onFocus={() => setShowDropdownSede(true)}
+                          onBlur={() => setTimeout(() => setShowDropdownSede(false), 200)}
+                          style={{ width: '100%', padding: '8px 10px', border: '1px solid #d1dce6', borderRadius: '6px', fontSize: '13px', outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box', opacity: sedeHabilitada ? 1 : 0.45, cursor: sedeHabilitada ? 'text' : 'not-allowed', background: sedeHabilitada ? 'white' : '#f8fafc' }}
+                        />
+                        {showDropdownSede && (
+                          <div style={{ position: 'absolute', top: 'calc(100% + 2px)', left: 0, right: 0, background: 'white', border: '1px solid #d1dce6', borderRadius: '8px', maxHeight: '200px', overflowY: 'auto', zIndex: 9999, boxShadow: '0 6px 20px rgba(0,0,0,0.15)' }}>
+                            {sedesCombo.length === 0 ? (
+                              <div style={{ padding: '10px 14px', color: '#94a3b8', fontSize: '13px', textAlign: 'center' }}>Sin sedes disponibles</div>
+                            ) : sedesCombo.map(s => (
+                              <div key={s.id}
+                                onMouseDown={() => { setBusquedaSede(s.nombre); setFormData(prev => ({...prev, sede: s.nombre})); setShowDropdownSede(false); }}
+                                style={{ padding: '9px 14px', cursor: 'pointer', fontSize: '13px', borderBottom: '1px solid #f1f5f9', fontWeight: 500, color: '#1e293b' }}
+                                onMouseEnter={e => e.currentTarget.style.background = '#f0f7ff'}
+                                onMouseLeave={e => e.currentTarget.style.background = 'white'}
+                              >{s.nombre}</div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    {puedeAsignarProceso && (
+                      <div className="form-group opc">
+                        <label>Proceso</label>
+                        <select
+                          disabled={!procesoHabilitado}
+                          value={formData.proceso_id}
+                          onChange={e => setFormData({...formData, proceso_id: e.target.value})}
+                          style={!procesoHabilitado ? {opacity:0.45, cursor:'not-allowed', background:'#f8fafc'} : {}}
+                        >
+                          <option value="">{procesoHabilitado ? 'Sin proceso' : 'Completa la sede primero'}</option>
+                          {procesosFiltrados.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                        </select>
+                      </div>
+                    )}
+                    <div className="form-group opc">
+                      <label>Piso</label>
+                      <input type="text" list="pisos-lista" placeholder="Ej: 1, 2, PB..."
+                        value={formData.piso} onChange={e => setFormData({...formData, piso: e.target.value})} />
+                      <datalist id="pisos-lista">
+                        {pisosDisponibles.map(p => <option key={p} value={p} />)}
+                      </datalist>
+                    </div>
+                    <div className="form-group opc">
+                      <label>Des. Puesto</label>
+                      <input type="text" list="modulos-lista" placeholder="Ej: A, B, 01..."
+                        value={formData.modulo} onChange={e => setFormData({...formData, modulo: e.target.value})} />
+                      <datalist id="modulos-lista">
+                        {modulosDisponibles.map(m => <option key={m} value={m} />)}
+                      </datalist>
+                    </div>
+                    {puedeAsignarProceso && (
+                      <div className="form-group opc"><label>Asignado a</label><input type="text" value={formData.asignado_a} onChange={e => setFormData({...formData, asignado_a: e.target.value})} /></div>
+                    )}
+                  </div>
+                )}
+
+                {/* ── Paso 3: Especificaciones técnicas ── */}
+                {pasoActual === 3 && (
+                  <div className="form-grid">
+                    <div className="form-group req"><label>Procesador</label><input type="text" value={formData.procesador} onChange={e => setFormData(prev => ({...prev, procesador: e.target.value}))} /></div>
+                    <div className="form-group req"><label>RAM</label><input type="text" value={formData.ram} onChange={e => setFormData(prev => ({...prev, ram: e.target.value}))} /></div>
+                    <div className="form-group req"><label>Disco Duro</label><input type="text" value={formData.disco_duro} onChange={e => setFormData(prev => ({...prev, disco_duro: e.target.value}))} /></div>
+                    <div className="form-group req"><label>Sistema Operativo</label><input type="text" value={formData.sistema_operativo} onChange={e => setFormData(prev => ({...prev, sistema_operativo: e.target.value}))} /></div>
+                    <div className="form-group opc">
+                      <label>Fecha inicio garantía</label>
+                      <input type="date" value={formData.fecha_garantia || ''} onChange={e => setFormData(prev => ({...prev, fecha_garantia: e.target.value}))} />
+                    </div>
+                    <div className="form-group opc">
+                      <label>Duración garantía</label>
+                      <div className="garantia-nav">
+                        {[{label:'6 meses',valor:'6',unidad:'meses'},{label:'1 año',valor:'1',unidad:'años'},{label:'3 años',valor:'3',unidad:'años'}].map(op => {
+                          const activo = garantiaValor === op.valor && garantiaUnidad === op.unidad;
+                          return (
+                            <button key={op.label} type="button"
+                              className={`garantia-btn${activo ? ' garantia-btn-active' : ''}`}
+                              onClick={() => {
+                                if (activo) { setGarantiaValor(''); setGarantiaUnidad('meses'); }
+                                else { setGarantiaValor(op.valor); setGarantiaUnidad(op.unidad); }
+                              }}>
+                              {op.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {(() => {
+                        if (!garantiaValor || !formData.fecha_garantia) return (
+                          <span style={{fontSize:'10px',color:'#94a3b8',marginTop:'4px',display:'block'}}>
+                            {!formData.fecha_garantia && garantiaValor ? 'Ingresa la fecha de inicio' : 'Fecha fin: N/A'}
+                          </span>
+                        );
+                        const dias = aTotalDias(garantiaValor, garantiaUnidad);
+                        const inicio = new Date(formData.fecha_garantia + 'T12:00:00');
+                        const fin = new Date(inicio);
+                        fin.setDate(fin.getDate() + dias);
+                        const hoy = new Date(); hoy.setHours(0,0,0,0); fin.setHours(0,0,0,0);
+                        if (fin <= hoy) return <span style={{fontSize:'10px',color:'#64748b',marginTop:'4px',display:'block',fontWeight:'500'}}>Garantía vencida</span>;
+                        const texto = fin.toLocaleDateString('es-CO', { day: '2-digit', month: 'long', year: 'numeric' });
+                        return <span style={{fontSize:'10px',color:'#15803d',marginTop:'4px',display:'block',fontWeight:'500'}}>Vence el {texto}</span>;
+                      })()}
+                    </div>
+                  </div>
+                )}
+
+                {/* ── Paso 4: Periféricos ── */}
+                {pasoActual === 4 && (
+                  <>
+                    <div className="extras-section">
+                      <div className="extras-header">
+                        <span className="extras-title">Periféricos</span>
+                        <button type="button" className="btn-agregar-extra"
+                          onClick={() => setPerifericos(prev => [...prev, { tipo_id: '', marca: '', modelo: '', serial: '', descripcion: '' }])}>
+                          + Agregar
+                        </button>
+                      </div>
+                      {perifericos.length === 0 && (
+                        <p className="extras-vacio">Sin periféricos. Haz clic en "+ Agregar" para añadir.</p>
+                      )}
+                      {perifericos.map((p, idx) => {
+                        const upd = (field, val) => {
+                          const nuevos = [...perifericos];
+                          nuevos[idx] = { ...nuevos[idx], [field]: val };
+                          setPerifericos(nuevos);
+                        };
+                        return (
+                          <div key={idx} className="periferico-card">
+                            <div className="periferico-card-top">
+                              <select className="extra-select" value={p.tipo_id || ''} onChange={e => upd('tipo_id', e.target.value)}>
+                                <option value="">Sin tipo</option>
+                                {tiposPeriferico.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
+                              </select>
+                              <button type="button" className="extra-btn-remove" onClick={() => setPerifericos(prev => prev.filter((_, i) => i !== idx))}>✕</button>
+                            </div>
+                            <div className="periferico-card-fields">
+                              <input className="extra-input" type="text" placeholder="Marca" value={p.marca || ''} onChange={e => upd('marca', e.target.value)} />
+                              <input className="extra-input" type="text" placeholder="Modelo" value={p.modelo || ''} onChange={e => upd('modelo', e.target.value)} />
+                              <input className="extra-input" type="text" placeholder="Serial" value={p.serial || ''} onChange={e => upd('serial', e.target.value.toUpperCase())} style={{textTransform:'uppercase'}} />
+                              <input className="extra-input periferico-desc" type="text" placeholder="Descripción adicional" value={p.descripcion || ''} onChange={e => upd('descripcion', e.target.value)} />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn-cancel" onClick={() => setMostrarModal(false)}>Cancelar</button>
-                <button type="submit" className="btn-save" disabled={cargandoForm}>{cargandoForm ? 'Guardando...' : (equipoEditando ? 'Actualizar' : 'Guardar')}</button>
+                <button type="button" className="btn-cancel"
+                  onClick={() => pasoActual === 1 ? setMostrarModal(false) : setPasoActual(p => p - 1)}>
+                  {pasoActual === 1 ? 'Cancelar' : '← Anterior'}
+                </button>
+                {pasoActual < 4 ? (
+                  <button type="button" className="btn-save" onClick={handleSiguiente}>Siguiente →</button>
+                ) : (
+                  <button type="button" className="btn-save" disabled={cargandoForm} onClick={handleSubmit}>
+                    {cargandoForm ? 'Guardando...' : (equipoEditando ? 'Actualizar' : 'Guardar')}
+                  </button>
+                )}
               </div>
             </form>
           </div>
@@ -1213,44 +1286,21 @@ function Equipos() {
               })()}
               <div style={{ gridColumn: '1 / -1' }}>
                 {(() => {
-                  const g = calcularGarantia(equipoDetalle.fecha_asignacion, equipoDetalle.garantia);
-                  if (!g.tiene) return <><strong>Garantía:</strong> <span style={{ color: '#94a3b8' }}>Sin información</span></>;
+                  if (!equipoDetalle.fecha_garantia || !equipoDetalle.garantia) return <><strong>Garantía:</strong> <span style={{ color: '#94a3b8' }}>N/A</span></>;
+                  const inicioGar = new Date(equipoDetalle.fecha_garantia); inicioGar.setHours(0,0,0,0);
+                  const finGar = new Date(inicioGar); finGar.setDate(finGar.getDate() + parseInt(equipoDetalle.garantia));
+                  const hoyGar = new Date(); hoyGar.setHours(0,0,0,0);
+                  const textoFin = finGar.toLocaleDateString('es-CO', { day: '2-digit', month: 'long', year: 'numeric' });
+                  if (finGar <= hoyGar) return <><strong>Garantía:</strong> <span style={{ color: '#64748b', fontWeight: '600' }}>Vencida — expiró el {textoFin}</span></>;
+                  const diasGar = Math.ceil((finGar - hoyGar) / (1000*60*60*24));
+                  const cGar = diasGar <= 30 ? {bg:'#fef2f2',color:'#dc2626',border:'#fecaca'} : diasGar <= 180 ? {bg:'#fffbeb',color:'#b45309',border:'#fde68a'} : {bg:'#f0fdf4',color:'#15803d',border:'#bbf7d0'};
+                  const g = { tiene: true, vencida: false };
                   const c = colorGarantia(g.estado);
                   return (
-                    <div style={{ background: c.bg, border: `1px solid ${c.border}`, borderRadius: '10px', padding: '12px 16px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '8px' }}>
-                        <div>
-                          <p style={{ margin: '0 0 4px', fontSize: '11px', fontWeight: '600', color: c.color, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                            {g.vencida ? 'Garantía vencida' : 'Garantía vigente'}
-                          </p>
-                          <p style={{ margin: 0, fontSize: '20px', fontWeight: '700', color: c.color }}>
-                            {g.vencida
-                              ? `Venció hace ${textoGarantia(g)}`
-                              : textoGarantia(g)}
-                          </p>
-                          {!g.vencida && (
-                            <div style={{ display: 'flex', gap: '16px', marginTop: '8px' }}>
-                              {g.años > 0 && <div style={{ textAlign: 'center' }}>
-                                <p style={{ margin: 0, fontSize: '22px', fontWeight: '700', color: c.color }}>{g.años}</p>
-                                <p style={{ margin: 0, fontSize: '10px', color: c.color, opacity: 0.8 }}>{g.años === 1 ? 'AÑO' : 'AÑOS'}</p>
-                              </div>}
-                              {g.meses > 0 && <div style={{ textAlign: 'center' }}>
-                                <p style={{ margin: 0, fontSize: '22px', fontWeight: '700', color: c.color }}>{g.meses}</p>
-                                <p style={{ margin: 0, fontSize: '10px', color: c.color, opacity: 0.8 }}>{g.meses === 1 ? 'MES' : 'MESES'}</p>
-                              </div>}
-                              <div style={{ textAlign: 'center' }}>
-                                <p style={{ margin: 0, fontSize: '22px', fontWeight: '700', color: c.color }}>{g.dias}</p>
-                                <p style={{ margin: 0, fontSize: '10px', color: c.color, opacity: 0.8 }}>{g.dias === 1 ? 'DÍA' : 'DÍAS'}</p>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                        <div style={{ textAlign: 'right' }}>
-                          <p style={{ margin: 0, fontSize: '11px', color: c.color, opacity: 0.7 }}>Vence el</p>
-                          <p style={{ margin: 0, fontSize: '13px', fontWeight: '600', color: c.color }}>{g.fechaFinTexto}</p>
-                          <p style={{ margin: '4px 0 0', fontSize: '11px', color: c.color, opacity: 0.7 }}>{formatearDias(equipoDetalle.garantia)} de garantía</p>
-                        </div>
-                      </div>
+                    <div style={{ background: cGar.bg, border: `1px solid ${cGar.border}`, borderRadius: '10px', padding: '12px 16px' }}>
+                      <p style={{ margin: '0 0 2px', fontSize: '11px', fontWeight: '600', color: cGar.color, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Garantía vigente</p>
+                      <p style={{ margin: 0, fontSize: '18px', fontWeight: '700', color: cGar.color }}>Vence el {textoFin}</p>
+                      <p style={{ margin: '2px 0 0', fontSize: '11px', color: cGar.color, opacity: 0.75 }}>{diasGar} días restantes</p>
                     </div>
                   );
                 })()}
@@ -1345,10 +1395,10 @@ equiposStyles.textContent = `
   .badge-danger { background: #fed7d7; color: #742a2a; }
   .badge-neutral { background: #edf2f7; color: #4a5568; }
   
-  .btn-view, .btn-edit, .btn-delete { padding: 2px 6px; border-radius: 4px; border: none; cursor: pointer; font-size: 9px; font-weight: 500; margin-right: 3px; }
+  .btn-view, .btn-edit { padding: 2px 6px; border-radius: 4px; border: none; cursor: pointer; font-size: 9px; font-weight: 500; margin-right: 3px; }
   .btn-view { background: #e0f2fe; color: #0369a1; }
   .btn-edit { background: #e0e7ff; color: #4338ca; }
-  .btn-delete { background: #fee2e2; color: #dc2626; }
+  .btn-baja { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; padding: 2px 6px; border-radius: 4px; cursor: pointer; font-size: 9px; font-weight: 500; margin-right: 3px; }
   
   .mensaje-exito, .mensaje-error { padding: 6px 10px; border-radius: 5px; margin-bottom: 10px; font-size: 11px; }
   .mensaje-exito { background: #e8f5ed; color: #2a6e3b; }
@@ -1396,6 +1446,23 @@ equiposStyles.textContent = `
   .observaciones-label { display: flex; align-items: center; gap: 6px; }
   .observaciones-badge { background: #f97316; color: #fff; border-radius: 4px; padding: 1px 6px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; }
   
+  .stepper { display: flex; align-items: flex-start; padding: 14px 20px 10px; border-bottom: 1px solid #e2e8f0; }
+  .stepper-item { display: flex; flex-direction: column; align-items: center; flex: 1; position: relative; }
+  .stepper-item:not(:last-child)::after { content: ''; position: absolute; top: 14px; left: 50%; width: 100%; height: 2px; background: #e2e8f0; z-index: 0; }
+  .stepper-item.done:not(:last-child)::after { background: #1a3a5c; }
+  .stepper-circle { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; border: 2px solid #cbd5e1; background: white; color: #9ca3af; position: relative; z-index: 1; transition: all 0.2s; }
+  .stepper-item.active .stepper-circle { border-color: #1a3a5c; background: #1a3a5c; color: white; }
+  .stepper-item.done .stepper-circle { border-color: #1a3a5c; background: #1a3a5c; color: white; }
+  .stepper-label { font-size: 9px; font-weight: 600; color: #9ca3af; margin-top: 5px; text-align: center; white-space: nowrap; }
+  .stepper-item.active .stepper-label { color: #1a3a5c; font-weight: 700; }
+  .stepper-item.done .stepper-label { color: #1a3a5c; }
+
+  .garantia-nav { display: flex; border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden; }
+  .garantia-btn { flex: 1; padding: 6px 0; font-size: 11px; font-weight: 500; background: white; border: none; border-right: 1px solid #e2e8f0; cursor: pointer; color: #64748b; transition: all 0.15s; }
+  .garantia-btn:last-child { border-right: none; }
+  .garantia-btn:hover:not(.garantia-btn-active) { background: #f0f7ff; color: #1a3a5c; }
+  .garantia-btn-active { background: #1a3a5c; color: white; font-weight: 600; }
+
   .form-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
   .form-group { margin-bottom: 0; }
   .form-group label { display: block; font-size: 10px; font-weight: 600; color: #2d3748; margin-bottom: 2px; }
@@ -1424,16 +1491,6 @@ equiposStyles.textContent = `
     background: #fffbeb; border: 1px solid #fcd34d; border-radius: 10px;
     padding: 12px 20px; margin-bottom: 16px; gap: 16px; flex-wrap: wrap;
   }
-  .seleccion-info { font-size: 14px; font-weight: 500; color: #92400e; }
-  .btn-eliminar-masivo {
-    background: #dc2626; color: white; border: none; border-radius: 8px;
-    padding: 8px 18px; font-size: 13px; font-weight: 600; cursor: pointer;
-    transition: background 0.15s;
-  }
-  .btn-eliminar-masivo:hover:not(:disabled) { background: #b91c1c; }
-  .btn-eliminar-masivo:disabled { background: #fca5a5; cursor: not-allowed; }
-  .th-checkbox, .td-checkbox { width: 40px; text-align: center; padding: 8px 4px !important; }
-  .checkbox-tabla { width: 16px; height: 16px; cursor: pointer; accent-color: #2563eb; }
   .fila-seleccionada { background: #eff6ff !important; }
   .equipo-codigo { font-size: 11px; color: #94a3b8; display: block; line-height: 1.2; }
 

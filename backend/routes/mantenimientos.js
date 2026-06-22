@@ -7,11 +7,11 @@ const {
 } = require('../controllers/mantenimientosController');
 
 router.get('/',                  verificarToken, getMantenimientos);
-router.post('/',                 verificarToken, verificarRol(['super_admin', 'gestion']), crearMantenimiento);
-router.put('/:id',               verificarToken, verificarRol(['super_admin', 'gestion']), actualizarMantenimiento);
-router.delete('/:id',            verificarToken, verificarRol(['super_admin', 'gestion']), eliminarMantenimiento);
-router.post('/:id/completar',    verificarToken, verificarRol(['super_admin', 'gestion']), completarMantenimiento);
-router.post('/:id/aprobar',      verificarToken, verificarRol(['super_admin', 'gestion']), aprobarMantenimiento);
-router.post('/:id/rechazar',     verificarToken, verificarRol(['super_admin', 'gestion']), rechazarMantenimiento);
+router.post('/',                 verificarToken, verificarRol(['super_admin', 'soporte']), crearMantenimiento);
+router.put('/:id',               verificarToken, verificarRol(['super_admin', 'soporte']), actualizarMantenimiento);
+router.delete('/:id',            verificarToken, verificarRol(['super_admin', 'soporte']), eliminarMantenimiento);
+router.post('/:id/completar',    verificarToken, verificarRol(['super_admin', 'soporte']), completarMantenimiento);
+router.post('/:id/aprobar',      verificarToken, verificarRol(['super_admin', 'soporte']), aprobarMantenimiento);
+router.post('/:id/rechazar',     verificarToken, verificarRol(['super_admin', 'soporte']), rechazarMantenimiento);
 
 module.exports = router;
