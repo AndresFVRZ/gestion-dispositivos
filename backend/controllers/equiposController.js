@@ -1,37 +1,51 @@
 const pool = require('../config/db');
-const { registrarHistorial } = require('../utils/helpers');
+const { registrarAuditoria } = require('../utils/helpers');
 
-// Subquery reutilizable para incluir periféricos con su tipo
-const PERIFERICOS_SUBQUERY = `
-    COALESCE(
-        (SELECT json_agg(json_build_object(
-            'id',          p.id,
-            'tipo_id',     p.tipo_id,
-            'tipo_nombre', td.nombre,
-            'marca',       p.marca,
-            'modelo',      p.modelo,
-            'serial',      p.serial,
-            'descripcion', p.descripcion
-         ) ORDER BY p.id)
+// Adjunta el arreglo `perifericos` a uno o varios equipos con una sola consulta.
+// Reemplaza al json_agg/json_build_object de PostgreSQL (no está en MariaDB 10.4).
+// `runner` puede ser el pool o un client de transacción.
+const attachPerifericos = async (rows, runner = pool) => {
+    if (!rows.length) return rows;
+    const ids = rows.map(r => r.id);
+    const { rows: peris } = await runner.query(
+        `SELECT p.equipo_id,
+                p.id, p.tipo_id, td.nombre AS tipo_nombre,
+                p.marca, p.modelo, p.serial, p.descripcion
          FROM perifericos p
          LEFT JOIN tipo_dispositivo td ON td.id = p.tipo_id
-         WHERE p.equipo_id = eq.id),
-        '[]'::json
-    ) AS perifericos
-`;
+         WHERE p.equipo_id IN (?)
+         ORDER BY p.id`,
+        [ids]
+    );
+    const map = new Map();
+    for (const p of peris) {
+        if (!map.has(p.equipo_id)) map.set(p.equipo_id, []);
+        map.get(p.equipo_id).push({
+            id: p.id,
+            tipo_id: p.tipo_id,
+            tipo_nombre: p.tipo_nombre,
+            marca: p.marca,
+            modelo: p.modelo,
+            serial: p.serial,
+            descripcion: p.descripcion,
+        });
+    }
+    for (const r of rows) r.perifericos = map.get(r.id) || [];
+    return rows;
+};
 
 // Guarda (borra y re-inserta) los periféricos de un equipo.
 // Solo acepta tipo_id cuya categoria='periferico' en tipo_dispositivo.
 const guardarPerifericos = async (client, equipoId, perifericos) => {
     if (!Array.isArray(perifericos)) return;
 
-    await client.query('DELETE FROM perifericos WHERE equipo_id = $1', [equipoId]);
+    await client.query('DELETE FROM perifericos WHERE equipo_id = ?', [equipoId]);
 
     const tiposIds = [...new Set(perifericos.map(p => p?.tipo_id).filter(Boolean))];
     let tiposValidos = new Set();
     if (tiposIds.length > 0) {
         const check = await client.query(
-            `SELECT id FROM tipo_dispositivo WHERE id = ANY($1::int[]) AND categoria = 'periferico'`,
+            `SELECT id FROM tipo_dispositivo WHERE id IN (?) AND categoria = 'periferico'`,
             [tiposIds]
         );
         tiposValidos = new Set(check.rows.map(r => r.id));
@@ -47,7 +61,7 @@ const guardarPerifericos = async (client, equipoId, perifericos) => {
         if (tipo_id || marca || modelo || serial || descripcion) {
             await client.query(
                 `INSERT INTO perifericos (equipo_id, tipo_id, marca, modelo, serial, descripcion)
-                 VALUES ($1, $2, $3, $4, $5, $6)`,
+                 VALUES (?, ?, ?, ?, ?, ?)`,
                 [equipoId, tipo_id, marca, modelo, serial, descripcion]
             );
         }
@@ -66,8 +80,7 @@ const getEquipos = async (req, res) => {
             SELECT eq.*, e.nombre as empresa_nombre,
                    td.nombre as tipo_nombre,
                    ep.nombre as prestado_a_nombre,
-                   pr.nombre as proceso_nombre,
-                   ${PERIFERICOS_SUBQUERY}
+                   pr.nombre as proceso_nombre
             FROM equipos eq
             JOIN empresas e ON eq.empresa_id = e.id
             LEFT JOIN tipo_dispositivo td ON eq.tipo_id = td.id
@@ -90,11 +103,11 @@ const getEquipos = async (req, res) => {
             if (empresaIds.length > 0) {
                 query += `
                   AND (
-                    eq.empresa_id = ANY($1::int[])
+                    eq.empresa_id IN (?)
                     OR
-                    (eq.prestado_a_empresa_id IS NOT NULL AND eq.prestado_a_empresa_id = ANY($1::int[]))
+                    (eq.prestado_a_empresa_id IS NOT NULL AND eq.prestado_a_empresa_id IN (?))
                   )`;
-                params.push(empresaIds);
+                params.push(empresaIds, empresaIds);
             } else {
                 return res.json({ success: true, data: [] });
             }
@@ -102,6 +115,7 @@ const getEquipos = async (req, res) => {
 
         query += ` ORDER BY e.nombre, td.nombre, eq.codigo`;
         const result = await pool.query(query, params);
+        await attachPerifericos(result.rows);
         res.json({ success: true, data: result.rows });
     } catch (error) {
         console.error('Error:', error);
@@ -115,16 +129,16 @@ const getEquiposByEmpresa = async (req, res) => {
         const query = `
             SELECT eq.*, e.nombre as empresa_nombre,
                    td.nombre as tipo_nombre,
-                   pr.nombre as proceso_nombre,
-                   ${PERIFERICOS_SUBQUERY}
+                   pr.nombre as proceso_nombre
             FROM equipos eq
             JOIN empresas e ON eq.empresa_id = e.id
             LEFT JOIN tipo_dispositivo td ON eq.tipo_id = td.id
             LEFT JOIN procesos pr ON eq.proceso_id = pr.id
-            WHERE eq.empresa_id = $1 AND eq.eliminado = FALSE
+            WHERE eq.empresa_id = ? AND eq.eliminado = FALSE
             ORDER BY td.nombre, eq.nombre_equipo
         `;
         const result = await pool.query(query, [empresaId]);
+        await attachPerifericos(result.rows);
         res.json({ success: true, data: result.rows });
     } catch (error) {
         console.error('Error en getEquiposByEmpresa:', error);
@@ -169,7 +183,7 @@ const crearEquipo = async (req, res) => {
 
         if (tipo_id) {
             const tipoCheck = await pool.query(
-                `SELECT categoria FROM tipo_dispositivo WHERE id = $1`, [tipo_id]
+                `SELECT categoria FROM tipo_dispositivo WHERE id = ?`, [tipo_id]
             );
             if (tipoCheck.rows.length === 0 || tipoCheck.rows[0].categoria !== 'equipo') {
                 return res.status(400).json({ success: false, message: 'El tipo seleccionado no es válido para equipos' });
@@ -185,14 +199,13 @@ const crearEquipo = async (req, res) => {
         const client = await pool.connect();
         try {
             await client.query('BEGIN');
-            const result = await client.query(
+            const ins = await client.query(
                 `INSERT INTO equipos
                     (codigo, nombre_equipo, tipo_id, marca, modelo, serial, estado,
                      ubicacion, piso, modulo, asignado_a, fecha_garantia, procesador, ram, disco_duro,
                      sistema_operativo, garantia, especificaciones, observaciones,
                      empresa_id, numero_placa, sede, prestado_a_empresa_id, proceso_id, created_at)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, NOW())
-                 RETURNING *`,
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
                 [
                     req.body.codigo || null, nombre_equipo, tipo_id || null, marca, modelo, serial, estado,
                     ubicacion, piso || null, modulo || null, asignadoACrear, fechaGar, procesador, ram, disco_duro,
@@ -200,10 +213,12 @@ const crearEquipo = async (req, res) => {
                     empresa_id, numero_placa || null, sede || null, prestado_a_empresa_id || null, procesoIdCrear
                 ]
             );
-            await guardarPerifericos(client, result.rows[0].id, perifericos);
+            const sel = await client.query(`SELECT * FROM equipos WHERE id = ?`, [ins.insertId]);
+            const equipo = sel.rows[0];
+            await guardarPerifericos(client, equipo.id, perifericos);
             await client.query('COMMIT');
-            await registrarHistorial(pool, req, 'CREAR', result.rows[0], `Equipo creado: ${serial || nombre_equipo}`);
-            res.status(201).json({ success: true, data: result.rows[0] });
+            await registrarAuditoria(pool, req, 'CREAR', equipo, `Equipo creado: ${serial || nombre_equipo}`);
+            res.status(201).json({ success: true, data: equipo });
         } catch (err) {
             await client.query('ROLLBACK');
             throw err;
@@ -263,7 +278,7 @@ const actualizarEquipo = async (req, res) => {
         let asignadoAFinal = asignado_a || '';
         if (!ROLES_ASIGNAR.includes(req.usuario?.rol)) {
             const curr = await pool.query(
-                'SELECT proceso_id, asignado_a FROM equipos WHERE id = $1 AND eliminado = FALSE', [id]
+                'SELECT proceso_id, asignado_a FROM equipos WHERE id = ? AND eliminado = FALSE', [id]
             );
             if (curr.rows.length > 0) {
                 procesoIdFinal = curr.rows[0].proceso_id;
@@ -273,7 +288,7 @@ const actualizarEquipo = async (req, res) => {
 
         if (tipo_id) {
             const tipoCheck = await pool.query(
-                `SELECT categoria FROM tipo_dispositivo WHERE id = $1`, [tipo_id]
+                `SELECT categoria FROM tipo_dispositivo WHERE id = ?`, [tipo_id]
             );
             if (tipoCheck.rows.length === 0 || tipoCheck.rows[0].categoria !== 'equipo') {
                 return res.status(400).json({ success: false, message: 'El tipo seleccionado no es válido para equipos' });
@@ -285,16 +300,15 @@ const actualizarEquipo = async (req, res) => {
         const client = await pool.connect();
         try {
             await client.query('BEGIN');
-            const result = await client.query(
+            await client.query(
                 `UPDATE equipos SET
-                    codigo = $1, nombre_equipo = $2, tipo_id = $3, marca = $4, modelo = $5,
-                    serial = $6, estado = $7, ubicacion = $8, piso = $9, modulo = $10,
-                    asignado_a = $11, fecha_garantia = $12, procesador = $13, ram = $14,
-                    disco_duro = $15, sistema_operativo = $16, garantia = $17,
-                    especificaciones = $18, observaciones = $19, empresa_id = $20,
-                    numero_placa = $21, sede = $22, prestado_a_empresa_id = $23, proceso_id = $24
-                 WHERE id = $25 AND eliminado = FALSE
-                 RETURNING *`,
+                    codigo = ?, nombre_equipo = ?, tipo_id = ?, marca = ?, modelo = ?,
+                    serial = ?, estado = ?, ubicacion = ?, piso = ?, modulo = ?,
+                    asignado_a = ?, fecha_garantia = ?, procesador = ?, ram = ?,
+                    disco_duro = ?, sistema_operativo = ?, garantia = ?,
+                    especificaciones = ?, observaciones = ?, empresa_id = ?,
+                    numero_placa = ?, sede = ?, prestado_a_empresa_id = ?, proceso_id = ?
+                 WHERE id = ? AND eliminado = FALSE`,
                 [
                     req.body.codigo || null, nombre_equipo, tipo_id || null, marca, modelo, serial, estado,
                     ubicacion, piso || null, modulo || null, asignadoAFinal, fechaGar, procesador, ram,
@@ -303,14 +317,16 @@ const actualizarEquipo = async (req, res) => {
                     procesoIdFinal, id
                 ]
             );
-            if (result.rows.length === 0) {
+            const sel = await client.query(`SELECT * FROM equipos WHERE id = ? AND eliminado = FALSE`, [id]);
+            if (sel.rows.length === 0) {
                 await client.query('ROLLBACK');
                 return res.status(404).json({ success: false, message: 'Equipo no encontrado' });
             }
+            const equipo = sel.rows[0];
             await guardarPerifericos(client, id, perifericos);
             await client.query('COMMIT');
-            await registrarHistorial(pool, req, 'EDITAR', result.rows[0], `Equipo editado: ${serial || nombre_equipo}`);
-            res.json({ success: true, data: result.rows[0] });
+            await registrarAuditoria(pool, req, 'EDITAR', equipo, `Equipo editado: ${serial || nombre_equipo}`);
+            res.json({ success: true, data: equipo });
         } catch (err) {
             await client.query('ROLLBACK');
             throw err;
@@ -332,17 +348,17 @@ const getEquipoById = async (req, res) => {
         const result = await pool.query(
             `SELECT eq.*, e.nombre as empresa_nombre,
                     td.nombre as tipo_nombre,
-                    pr.nombre as proceso_nombre,
-                    ${PERIFERICOS_SUBQUERY}
+                    pr.nombre as proceso_nombre
              FROM equipos eq
              JOIN empresas e ON eq.empresa_id = e.id
              LEFT JOIN tipo_dispositivo td ON eq.tipo_id = td.id
              LEFT JOIN procesos pr ON eq.proceso_id = pr.id
-             WHERE eq.id = $1 AND eq.eliminado = FALSE`,
+             WHERE eq.id = ? AND eq.eliminado = FALSE`,
             [id]
         );
         if (result.rows.length === 0)
             return res.status(404).json({ success: false, message: 'Equipo no encontrado' });
+        await attachPerifericos(result.rows);
         res.json({ success: true, data: result.rows[0] });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -363,7 +379,7 @@ const reasignarPerifericos = async (req, res) => {
             return res.status(400).json({ success: false, message: 'El equipo destino debe ser diferente al origen' });
 
         const destCheck = await pool.query(
-            'SELECT id FROM equipos WHERE id = $1 AND eliminado = FALSE', [destino_equipo_id]
+            'SELECT id FROM equipos WHERE id = ? AND eliminado = FALSE', [destino_equipo_id]
         );
         if (destCheck.rows.length === 0)
             return res.status(404).json({ success: false, message: 'Equipo destino no encontrado' });
@@ -371,13 +387,13 @@ const reasignarPerifericos = async (req, res) => {
         let result;
         if (Array.isArray(perifericos_ids) && perifericos_ids.length > 0) {
             result = await pool.query(
-                `UPDATE perifericos SET equipo_id = $1
-                 WHERE equipo_id = $2 AND id = ANY($3::int[]) RETURNING id`,
+                `UPDATE perifericos SET equipo_id = ?
+                 WHERE equipo_id = ? AND id IN (?)`,
                 [destino_equipo_id, id, perifericos_ids]
             );
         } else {
             result = await pool.query(
-                `UPDATE perifericos SET equipo_id = $1 WHERE equipo_id = $2 RETURNING id`,
+                `UPDATE perifericos SET equipo_id = ? WHERE equipo_id = ?`,
                 [destino_equipo_id, id]
             );
         }

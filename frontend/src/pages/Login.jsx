@@ -76,6 +76,12 @@ function Login() {
       {/* Panel izquierdo - Branding */}
       <div className="login-brand">
         <div className="login-brand-inner">
+          <img
+            src="/favicon.png"
+            alt="Logo"
+            className="login-brand-logo-img"
+            style={{ maxWidth: 480, maxHeight: 230, objectFit: 'contain', marginBottom: 24, display: 'block' }}
+          />
           <h1 className="login-brand-title">Gestión de Equipos</h1>
           <p className="login-brand-sub">Sistema corporativo de inventario tecnológico</p>
           <div className="login-brand-features">
@@ -89,7 +95,7 @@ function Login() {
             </div>
             <div className="login-feature">
               <span className="login-feature-dot" />
-              Historial de cambios en tiempo real
+              Auditoría de cambios en tiempo real
             </div>
           </div>
 
@@ -198,10 +204,10 @@ loginStyles.textContent = `
     border-radius: 50%;
     bottom: -80px; left: -80px;
   }
-  .login-brand-inner { position: relative; z-index: 1; max-width: 340px; }
+  .login-brand-inner { position: relative; z-index: 1; max-width: 480px; }
   .login-brand-logo-img {
-    max-width: 160px; max-height: 80px; object-fit: contain;
-    margin-bottom: 24px; filter: brightness(0) invert(1);
+    max-width: 480px; max-height: 230px; object-fit: contain;
+    margin-bottom: 24px;
   }
   /* Wallpaper de logos */
   .login-wallpaper {

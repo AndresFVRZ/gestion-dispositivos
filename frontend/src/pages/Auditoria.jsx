@@ -3,7 +3,7 @@
 // ==========================================
 import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
-import { getHistorial } from '../services/historialService';
+import { getAuditoria } from '../services/auditoriaService';
 import { useAuth } from '../context/AuthContext';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -11,8 +11,8 @@ import autoTable from 'jspdf-autotable';
 // ==========================================
 // 2. LÓGICA DEL COMPONENTE
 // ==========================================
-function Historial() {
-  const [historial, setHistorial] = useState([]);
+function Auditoria() {
+  const [auditoria, setAuditoria] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [filtroAccion, setFiltroAccion] = useState('todos');
   const [fechaDesde, setFechaDesde] = useState('');
@@ -21,10 +21,10 @@ function Historial() {
   const { usuario } = useAuth();
 
   useEffect(() => {
-    cargarHistorial();
+    cargarAuditoria();
   }, [filtroAccion, fechaDesde, fechaHasta]);
 
-  const cargarHistorial = async () => {
+  const cargarAuditoria = async () => {
     try {
       setCargando(true);
       const params = {};
@@ -32,9 +32,9 @@ function Historial() {
       if (fechaDesde) params.fecha_desde = fechaDesde;
       if (fechaHasta) params.fecha_hasta = fechaHasta;
       
-      const data = await getHistorial(params);
+      const data = await getAuditoria(params);
       if (data.success) {
-        setHistorial(data.data);
+        setAuditoria(data.data);
       }
     } catch (error) {
       console.error('Error:', error);
@@ -73,7 +73,7 @@ function Historial() {
     if (filtroAccion !== 'todos') params.accion = filtroAccion;
     if (fechaDesde) params.fecha_desde = fechaDesde;
     if (fechaHasta) params.fecha_hasta = fechaHasta;
-    const res = await getHistorial(params);
+    const res = await getAuditoria(params);
     return res?.data || [];
   };
 
@@ -96,7 +96,7 @@ function Historial() {
       const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url; a.download = `historial_${new Date().toISOString().split('T')[0]}.csv`;
+      a.href = url; a.download = `auditoria_${new Date().toISOString().split('T')[0]}.csv`;
       a.click(); URL.revokeObjectURL(url);
       toast.success('CSV descargado');
     } catch { toast.error('Error al generar el CSV'); }
@@ -108,7 +108,7 @@ function Historial() {
       if (datos.length === 0) { toast.error('No hay registros para descargar'); return; }
       const sep = '-'.repeat(70);
       const lineas = [
-        'EMTRA — Historial de Acciones',
+        'EMTRA — Auditoría de Acciones',
         `Generado: ${new Date().toLocaleString('es-CO')}`,
         `Total registros: ${datos.length}`,
         '='.repeat(70), '',
@@ -125,7 +125,7 @@ function Historial() {
       const blob = new Blob([lineas.join('\n')], { type: 'text/plain;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url; a.download = `historial_${new Date().toISOString().split('T')[0]}.txt`;
+      a.href = url; a.download = `auditoria_${new Date().toISOString().split('T')[0]}.txt`;
       a.click(); URL.revokeObjectURL(url);
       toast.success('TXT descargado');
     } catch { toast.error('Error al generar el TXT'); }
@@ -139,7 +139,7 @@ function Historial() {
       if (filtroAccion !== 'todos') params.accion = filtroAccion;
       if (fechaDesde) params.fecha_desde = fechaDesde;
       if (fechaHasta) params.fecha_hasta = fechaHasta;
-      const res = await getHistorial(params);
+      const res = await getAuditoria(params);
       const datos = res?.data || [];
       if (datos.length === 0) { toast.error('No hay registros para descargar'); return; }
 
@@ -162,7 +162,7 @@ function Historial() {
       doc.rect(0, 0, 297, 20, 'F');
       doc.setTextColor(255, 255, 255);
       doc.setFontSize(13); doc.setFont('helvetica', 'bold');
-      doc.text('EMTRA — Historial de Acciones', 14, 13);
+      doc.text('EMTRA — Auditoría de Acciones', 14, 13);
       doc.setFontSize(8); doc.setFont('helvetica', 'normal');
       doc.text(`Generado: ${fechaGen}`, 283, 13, { align: 'right' });
 
@@ -249,7 +249,7 @@ function Historial() {
         doc.text(`Página ${i} de ${pageCount}  —  EMTRA Gestión de Equipos`, 148.5, 205, { align: 'center' });
       }
 
-      doc.save(`historial_${new Date().toISOString().split('T')[0]}.pdf`);
+      doc.save(`auditoria_${new Date().toISOString().split('T')[0]}.pdf`);
     } catch (err) {
       toast.error('Error al generar el PDF');
       console.error(err);
@@ -259,7 +259,7 @@ function Historial() {
   };
 
   if (cargando) {
-    return <div style={styles.cargando}>Cargando historial...</div>;
+    return <div style={styles.cargando}>Cargando auditoría...</div>;
   }
 
   return (
@@ -276,17 +276,17 @@ function Historial() {
 
       <div style={styles.header}>
         <div>
-          <h1 style={styles.title}>Historial de Acciones</h1>
+          <h1 style={styles.title}>Auditoría de Acciones</h1>
           <p style={styles.subtitle}>Registro de todas las acciones del sistema</p>
         </div>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          <button onClick={descargarPDF} disabled={generandoPDF || historial.length === 0} style={styles.pdfButton}>
+          <button onClick={descargarPDF} disabled={generandoPDF || auditoria.length === 0} style={styles.pdfButton}>
             {generandoPDF ? 'Generando...' : '↓ PDF'}
           </button>
-          <button onClick={descargarCSV} disabled={historial.length === 0} style={styles.csvButton}>
+          <button onClick={descargarCSV} disabled={auditoria.length === 0} style={styles.csvButton}>
             ↓ CSV
           </button>
-          <button onClick={descargarTXT} disabled={historial.length === 0} style={styles.txtButton}>
+          <button onClick={descargarTXT} disabled={auditoria.length === 0} style={styles.txtButton}>
             ↓ TXT
           </button>
         </div>
@@ -329,14 +329,14 @@ function Historial() {
             />
           </div>
           <div style={styles.filterButtonContainer}>
-            <button onClick={cargarHistorial} style={styles.filterButton}>
+            <button onClick={cargarAuditoria} style={styles.filterButton}>
               Filtrar
             </button>
           </div>
         </div>
       </div>
 
-      {/* Tabla de historial */}
+      {/* Tabla de auditoría */}
       <div style={styles.tableContainer}>
         <div style={styles.tableWrapper}>
           <table style={styles.table}>
@@ -353,14 +353,14 @@ function Historial() {
               </tr>
             </thead>
             <tbody>
-              {historial.length === 0 ? (
+              {auditoria.length === 0 ? (
                 <tr>
                   <td colSpan="8" style={styles.emptyCell}>
-                    No hay registros en el historial
+                    No hay registros en la auditoría
                   </td>
                 </tr>
               ) : (
-                historial.map((item) => (
+                auditoria.map((item) => (
                   <tr key={item.id} style={styles.tr}>
                     <td style={styles.td}>{new Date(item.fecha).toLocaleString()}</td>
                     <td style={{ ...styles.td, fontWeight: '500' }}>{item.usuario_nombre || '-'}</td>
@@ -569,11 +569,11 @@ const styles = {
 // ==========================================
 // 4. ESTILOS GLOBALES (spinner)
 // ==========================================
-const historialStyles = document.createElement('style');
-historialStyles.textContent = `@keyframes spin { to { transform: rotate(360deg); } }`;
-document.head.appendChild(historialStyles);
+const auditoriaStyles = document.createElement('style');
+auditoriaStyles.textContent = `@keyframes spin { to { transform: rotate(360deg); } }`;
+document.head.appendChild(auditoriaStyles);
 
 // ==========================================
 // 5. EXPORTACIÓN
 // ==========================================
-export default Historial;
+export default Auditoria;

@@ -18,7 +18,7 @@ router.get('/', verificarToken, async (req, res) => {
         if (empresaIds.length === 0) return res.json({ success: true, data: [] });
 
         const result = await pool.query(
-            'SELECT * FROM empresas WHERE id = ANY($1::int[]) ORDER BY nombre',
+            'SELECT * FROM empresas WHERE id IN (?) ORDER BY nombre',
             [empresaIds]
         );
         res.json({ success: true, data: result.rows });
@@ -40,7 +40,7 @@ router.get('/para-prestamo', verificarToken, async (req, res) => {
 // GET /:id
 router.get('/:id', verificarToken, async (req, res) => {
     try {
-        const result = await pool.query('SELECT * FROM empresas WHERE id = $1', [req.params.id]);
+        const result = await pool.query('SELECT * FROM empresas WHERE id = ?', [req.params.id]);
         if (result.rows.length === 0)
             return res.status(404).json({ success: false, message: 'Empresa no encontrada' });
         res.json({ success: true, data: result.rows[0] });
@@ -56,10 +56,11 @@ router.post('/', verificarToken, verificarRol(['super_admin']), async (req, res)
         if (!nombre?.trim())
             return res.status(400).json({ success: false, message: 'El nombre es requerido' });
 
-        const result = await pool.query(
-            'INSERT INTO empresas (nombre, logo) VALUES ($1, $2) RETURNING *',
+        const ins = await pool.query(
+            'INSERT INTO empresas (nombre, logo) VALUES (?, ?)',
             [nombre.trim(), logo || null]
         );
+        const result = await pool.query('SELECT * FROM empresas WHERE id = ?', [ins.insertId]);
         res.status(201).json({ success: true, data: result.rows[0] });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -70,15 +71,16 @@ router.post('/', verificarToken, verificarRol(['super_admin']), async (req, res)
 router.put('/:id', verificarToken, verificarRol(['super_admin']), async (req, res) => {
     try {
         const { nombre, logo } = req.body;
-        const result = await pool.query(
+        const upd = await pool.query(
             `UPDATE empresas SET
-                nombre = COALESCE($1, nombre),
-                logo   = COALESCE($2, logo)
-             WHERE id = $3 RETURNING *`,
+                nombre = COALESCE(?, nombre),
+                logo   = COALESCE(?, logo)
+             WHERE id = ?`,
             [nombre?.trim() || null, logo || null, req.params.id]
         );
-        if (result.rows.length === 0)
+        if (upd.rowCount === 0)
             return res.status(404).json({ success: false, message: 'Empresa no encontrada' });
+        const result = await pool.query('SELECT * FROM empresas WHERE id = ?', [req.params.id]);
         res.json({ success: true, data: result.rows[0] });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -88,7 +90,7 @@ router.put('/:id', verificarToken, verificarRol(['super_admin']), async (req, re
 // DELETE /:id/logo — quitar logo
 router.delete('/:id/logo', verificarToken, verificarRol(['super_admin']), async (req, res) => {
     try {
-        await pool.query('UPDATE empresas SET logo = NULL WHERE id = $1', [req.params.id]);
+        await pool.query('UPDATE empresas SET logo = NULL WHERE id = ?', [req.params.id]);
         res.json({ success: true, message: 'Logo eliminado' });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });

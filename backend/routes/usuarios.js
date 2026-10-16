@@ -29,7 +29,7 @@ const LOGO_MAP = {
 const getLogoUrl = (nombreEmpresa) => {
   const key = (nombreEmpresa || '').toLowerCase().trim();
   const archivo = LOGO_MAP[key] || Object.entries(LOGO_MAP).find(([k]) => key.includes(k) || k.includes(key))?.[1];
-  return archivo ? `${process.env.APP_URL_BACKEND || 'http://localhost:5000'}/public/logos/${archivo}` : null;
+  return archivo ? `${process.env.APP_URL_BACKEND || 'http://localhost:5080'}/public/logos/${archivo}` : null;
 };
 
 // Todos los logos para mostrar en emails y páginas
@@ -124,23 +124,40 @@ const enviarInvitacion = async (nombre, email, token, empresas_ids = []) => {
   });
 };
 
+// Adjunta a cada usuario su arreglo `empresas` [{id, nombre}] con una sola consulta.
+// Sustituye al json_agg/json_build_object de PostgreSQL (no está en MariaDB 10.4).
+const cargarEmpresas = async (usuarios) => {
+  if (!usuarios.length) return;
+  const ids = usuarios.map(u => u.id);
+  const { rows } = await db.query(
+    `SELECT ue.usuario_id, e.id, e.nombre
+     FROM usuario_empresas ue
+     JOIN empresas e ON ue.empresa_id = e.id
+     WHERE ue.usuario_id IN (?)
+     ORDER BY e.nombre`,
+    [ids]
+  );
+  const map = new Map();
+  for (const r of rows) {
+    if (!map.has(r.usuario_id)) map.set(r.usuario_id, []);
+    map.get(r.usuario_id).push({ id: r.id, nombre: r.nombre });
+  }
+  for (const u of usuarios) u.empresas = map.get(u.id) || [];
+};
+
 // GET - Obtener todos los usuarios con sus empresas asignadas
 router.get('/', async (req, res) => {
   try {
     const result = await db.query(`
       SELECT u.id, u.nombre, u.email, u.estado,
-             r.nombre as rol,
-             COALESCE(
-                 (SELECT json_agg(json_build_object('id', e.id, 'nombre', e.nombre))
-                  FROM usuario_empresas ue
-                  JOIN empresas e ON ue.empresa_id = e.id
-                  WHERE ue.usuario_id = u.id), '[]'
-             ) as empresas
+             r.nombre as rol
       FROM usuarios u
       LEFT JOIN roles r ON u.rol_id = r.id
       WHERE u.estado != 'inactivo'
       ORDER BY u.id
     `);
+
+    await cargarEmpresas(result.rows);
 
     const usuarios = result.rows.map(u => ({
       id: u.id,
@@ -168,13 +185,13 @@ router.post('/', async (req, res) => {
   }
 
   try {
-    const emailCheck = await db.query('SELECT id FROM usuarios WHERE email = $1', [email]);
+    const emailCheck = await db.query('SELECT id FROM usuarios WHERE email = ?', [email]);
     if (emailCheck.rows.length > 0) {
       return res.status(400).json({ success: false, message: 'El email ya está registrado' });
     }
 
     const rolNombre = rol || 'financiera';
-    const rolResult = await db.query('SELECT id FROM roles WHERE nombre = $1', [rolNombre]);
+    const rolResult = await db.query('SELECT id FROM roles WHERE nombre = ?', [rolNombre]);
     if (rolResult.rows.length === 0) {
       return res.status(400).json({ success: false, message: `Rol "${rolNombre}" no existe` });
     }
@@ -183,14 +200,13 @@ router.post('/', async (req, res) => {
     const invitationToken = crypto.randomBytes(32).toString('hex');
     const invitationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
 
-    const result = await db.query(
+    const ins = await db.query(
       `INSERT INTO usuarios (nombre, email, password_hash, rol_id, rol, estado, invitation_token, invitation_expires_at)
-       VALUES ($1, $2, $3, $4, $5, 'pendiente', $6, $7)
-       RETURNING id`,
+       VALUES (?, ?, ?, ?, ?, 'pendiente', ?, ?)`,
       [nombre, email, '', rolId, rolNombre, invitationToken, invitationExpires]
     );
 
-    const userId = result.rows[0].id;
+    const userId = ins.insertId;
 
     if (rolNombre === 'financiera' && empresas_ids && empresas_ids.length > 1)
       return res.status(400).json({ success: false, message: 'El rol Financiera solo puede tener una empresa asignada' });
@@ -198,7 +214,7 @@ router.post('/', async (req, res) => {
     if (empresas_ids && empresas_ids.length > 0 && rolNombre !== 'super_admin') {
       for (const empresaId of empresas_ids) {
         await db.query(
-          `INSERT INTO usuario_empresas (usuario_id, empresa_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+          `INSERT IGNORE INTO usuario_empresas (usuario_id, empresa_id) VALUES (?, ?)`,
           [userId, empresaId]
         );
       }
@@ -217,7 +233,7 @@ router.post('/', async (req, res) => {
 router.post('/:id/reenviar-invitacion', async (req, res) => {
   const { id } = req.params;
   try {
-    const userResult = await db.query('SELECT * FROM usuarios WHERE id = $1', [id]);
+    const userResult = await db.query('SELECT * FROM usuarios WHERE id = ?', [id]);
     if (userResult.rows.length === 0) {
       return res.status(404).json({ success: false, message: 'Usuario no encontrado' });
     }
@@ -227,12 +243,12 @@ router.post('/:id/reenviar-invitacion', async (req, res) => {
     const invitationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
     await db.query(
-      `UPDATE usuarios SET invitation_token=$1, invitation_expires_at=$2, estado='pendiente' WHERE id=$3`,
+      `UPDATE usuarios SET invitation_token=?, invitation_expires_at=?, estado='pendiente' WHERE id=?`,
       [invitationToken, invitationExpires, id]
     );
 
     const empResult = await db.query(
-      'SELECT empresa_id FROM usuario_empresas WHERE usuario_id = $1 LIMIT 5', [id]
+      'SELECT empresa_id FROM usuario_empresas WHERE usuario_id = ? LIMIT 5', [id]
     );
     const empIds = empResult.rows.map(r => r.empresa_id);
     await enviarInvitacion(usuario.nombre, usuario.email, invitationToken, empIds);
@@ -250,7 +266,7 @@ router.put('/:id', async (req, res) => {
 
   try {
     const rolNombre = rol || 'financiera';
-    const rolResult = await db.query('SELECT id FROM roles WHERE nombre = $1', [rolNombre]);
+    const rolResult = await db.query('SELECT id FROM roles WHERE nombre = ?', [rolNombre]);
     if (rolResult.rows.length === 0) {
       return res.status(400).json({ success: false, message: `Rol "${rolNombre}" no existe` });
     }
@@ -259,12 +275,12 @@ router.put('/:id', async (req, res) => {
     if (password && password.trim() !== '') {
       const hashedPassword = await bcrypt.hash(password, 10);
       await db.query(
-        `UPDATE usuarios SET nombre=$1, email=$2, password_hash=$3, rol_id=$4, rol=$5 WHERE id=$6`,
+        `UPDATE usuarios SET nombre=?, email=?, password_hash=?, rol_id=?, rol=? WHERE id=?`,
         [nombre, email, hashedPassword, rolId, rolNombre, id]
       );
     } else {
       await db.query(
-        `UPDATE usuarios SET nombre=$1, email=$2, rol_id=$3, rol=$4 WHERE id=$5`,
+        `UPDATE usuarios SET nombre=?, email=?, rol_id=?, rol=? WHERE id=?`,
         [nombre, email, rolId, rolNombre, id]
       );
     }
@@ -273,11 +289,11 @@ router.put('/:id', async (req, res) => {
       if (rolNombre === 'financiera' && empresas_ids.length > 1)
         return res.status(400).json({ success: false, message: 'El rol Financiera solo puede tener una empresa asignada' });
 
-      await db.query('DELETE FROM usuario_empresas WHERE usuario_id = $1', [id]);
+      await db.query('DELETE FROM usuario_empresas WHERE usuario_id = ?', [id]);
       if (rolNombre !== 'super_admin' && empresas_ids.length > 0) {
         for (const empresaId of empresas_ids) {
           await db.query(
-            `INSERT INTO usuario_empresas (usuario_id, empresa_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+            `INSERT IGNORE INTO usuario_empresas (usuario_id, empresa_id) VALUES (?, ?)`,
             [id, empresaId]
           );
         }
@@ -295,8 +311,8 @@ router.put('/:id', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   const { id } = req.params;
   try {
-    await db.query('DELETE FROM usuario_empresas WHERE usuario_id = $1', [id]);
-    await db.query('UPDATE usuarios SET estado=$1 WHERE id=$2', ['inactivo', id]);
+    await db.query('DELETE FROM usuario_empresas WHERE usuario_id = ?', [id]);
+    await db.query('UPDATE usuarios SET estado=? WHERE id=?', ['inactivo', id]);
     res.json({ success: true, message: 'Usuario eliminado exitosamente' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

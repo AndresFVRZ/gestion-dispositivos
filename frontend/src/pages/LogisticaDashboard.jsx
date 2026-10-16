@@ -69,7 +69,7 @@ function LogisticaDashboard() {
           <p className="ld-hero-sub">Bienvenido, <strong>{usuario?.nombre}</strong> &mdash; {fecha}</p>
         </div>
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-          <button className="ld-btn-outline" onClick={() => navigate('/historial')}>Historial</button>
+          <button className="ld-btn-outline" onClick={() => navigate('/auditoria')}>Auditoría</button>
           <button className="ld-btn-white" onClick={() => navigate('/equipos')}>Inventario</button>
         </div>
       </div>
@@ -151,9 +151,9 @@ function LogisticaDashboard() {
               <span className="ld-quick-icon" style={{ background: '#f0fdf4', color: '#10b981' }}>≡</span>
               <div><p className="ld-quick-name">Ver Inventario</p><p className="ld-quick-desc">Lista completa y filtros</p></div>
             </button>
-            <button className="ld-quick-item" onClick={() => navigate('/historial')}>
+            <button className="ld-quick-item" onClick={() => navigate('/auditoria')}>
               <span className="ld-quick-icon" style={{ background: '#fefce8', color: '#d97706' }}>📋</span>
-              <div><p className="ld-quick-name">Ver Historial</p><p className="ld-quick-desc">Registro de movimientos</p></div>
+              <div><p className="ld-quick-name">Ver Auditoría</p><p className="ld-quick-desc">Registro de movimientos</p></div>
             </button>
           </div>
         </div>

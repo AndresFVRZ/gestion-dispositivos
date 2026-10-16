@@ -159,9 +159,9 @@ function AdministradorDashboard() {
               <span className="ad-quick-icon" style={{ background: '#faf5ff', color: '#7c3aed' }}>👤</span>
               <div><p className="ad-quick-name">Gestionar Usuarios</p><p className="ad-quick-desc">Crear y editar accesos</p></div>
             </button>
-            <button className="ad-quick-item" onClick={() => navigate('/historial')}>
+            <button className="ad-quick-item" onClick={() => navigate('/auditoria')}>
               <span className="ad-quick-icon" style={{ background: '#fefce8', color: '#d97706' }}>📋</span>
-              <div><p className="ad-quick-name">Historial</p><p className="ad-quick-desc">Registro de cambios</p></div>
+              <div><p className="ad-quick-name">Auditoría</p><p className="ad-quick-desc">Registro de cambios</p></div>
             </button>
           </div>
         </div>

@@ -47,7 +47,12 @@ function ResetPassword() {
       <div className="auth-page">
         <div className="auth-brand">
           <div className="auth-brand-inner">
-            <div className="auth-brand-logo">GE</div>
+            <div
+              className="auth-brand-logo"
+              style={{ width: 400, height: 190, maxWidth: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 28 }}
+            >
+              <img src="/favicon.png" alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+            </div>
             <h1 className="auth-brand-title">Gestión de Equipos</h1>
             <p className="auth-brand-sub">Sistema corporativo de inventario tecnológico</p>
           </div>
@@ -70,7 +75,12 @@ function ResetPassword() {
     <div className="auth-page">
       <div className="auth-brand">
         <div className="auth-brand-inner">
-          <div className="auth-brand-logo">GE</div>
+          <div
+            className="auth-brand-logo"
+            style={{ width: 400, height: 190, maxWidth: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 28 }}
+          >
+            <img src="/favicon.png" alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+          </div>
           <h1 className="auth-brand-title">Gestión de Equipos</h1>
           <p className="auth-brand-sub">Establece una nueva contraseña segura para tu cuenta</p>
           <div className="auth-brand-features">

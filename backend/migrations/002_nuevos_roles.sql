@@ -1,12 +1,14 @@
 -- Migración: Segunda etapa — nuevos roles
--- Ejecutar en PostgreSQL con permisos de administrador
+-- Motor: MariaDB / MySQL (XAMPP). Ejecutar con: mysql -u root lucoa < 002_nuevos_roles.sql
+-- Nota: el volcado inicial (data_mariadb.sql) ya incluye estos roles; este script
+-- queda como referencia / para entornos que partan de un esquema vacío.
 
 -- 1. Insertar nuevos roles
-INSERT INTO roles (nombre) VALUES ('administrador') ON CONFLICT (nombre) DO NOTHING;
-INSERT INTO roles (nombre) VALUES ('logistica')     ON CONFLICT (nombre) DO NOTHING;
-INSERT INTO roles (nombre) VALUES ('soporte')       ON CONFLICT (nombre) DO NOTHING;
-INSERT INTO roles (nombre) VALUES ('financiera')    ON CONFLICT (nombre) DO NOTHING;
-INSERT INTO roles (nombre) VALUES ('gerencia')      ON CONFLICT (nombre) DO NOTHING;
+INSERT IGNORE INTO roles (nombre) VALUES ('administrador');
+INSERT IGNORE INTO roles (nombre) VALUES ('logistica');
+INSERT IGNORE INTO roles (nombre) VALUES ('soporte');
+INSERT IGNORE INTO roles (nombre) VALUES ('financiera');
+INSERT IGNORE INTO roles (nombre) VALUES ('gerencia');
 
 -- 2. Migrar usuarios con roles antiguos a los nuevos equivalentes
 UPDATE usuarios

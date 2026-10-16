@@ -19,12 +19,16 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const storedToken = localStorage.getItem('token');
     const storedUsuario = localStorage.getItem('usuario');
-    
+
     if (storedToken && storedUsuario) {
       setToken(storedToken);
       setUsuario(JSON.parse(storedUsuario));
     }
-    setCargando(false);
+    // Duración mínima de la pantalla de carga: leer localStorage es
+    // instantáneo y sin este retraso el splash (con el logo) desaparece
+    // en un solo frame, antes de que se alcance a ver.
+    const t = setTimeout(() => setCargando(false), 1200);
+    return () => clearTimeout(t);
   }, []);
 
   const login = async (email, password) => {

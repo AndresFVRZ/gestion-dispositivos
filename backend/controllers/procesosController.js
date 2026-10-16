@@ -7,15 +7,14 @@ const getProcesos = async (req, res) => {
 
         let conditions = [];
         let params = [];
-        let i = 1;
 
         if (usuario.rol !== 'super_admin') {
             const empresaIds = (usuario.empresas || []).map(e => e.id);
             if (empresaIds.length === 0) return res.json({ success: true, data: [] });
-            conditions.push(`p.empresa_id = ANY($${i++}::int[])`);
+            conditions.push(`p.empresa_id IN (?)`);
             params.push(empresaIds);
         } else if (empresa_id) {
-            conditions.push(`p.empresa_id = $${i++}`);
+            conditions.push(`p.empresa_id = ?`);
             params.push(empresa_id);
         }
 
@@ -44,12 +43,13 @@ const crearProceso = async (req, res) => {
         if (!empresa_id || !nombre?.trim())
             return res.status(400).json({ success: false, message: 'Empresa y nombre son requeridos' });
 
-        const result = await pool.query(
+        const ins = await pool.query(
             `INSERT INTO procesos (empresa_id, nombre, descripcion, created_at)
-             VALUES ($1, $2, $3, NOW()) RETURNING *`,
+             VALUES (?, ?, ?, NOW())`,
             [empresa_id, nombre.trim(), descripcion?.trim() || null]
         );
-        res.status(201).json({ success: true, data: result.rows[0] });
+        const sel = await pool.query('SELECT * FROM procesos WHERE id = ?', [ins.insertId]);
+        res.status(201).json({ success: true, data: sel.rows[0] });
     } catch (error) {
         console.error('Error crearProceso:', error.message);
         res.status(500).json({ success: false, message: error.message });
@@ -64,14 +64,15 @@ const actualizarProceso = async (req, res) => {
         if (!nombre?.trim())
             return res.status(400).json({ success: false, message: 'El nombre es requerido' });
 
-        const result = await pool.query(
-            `UPDATE procesos SET nombre = $1, descripcion = $2 WHERE id = $3 RETURNING *`,
+        const upd = await pool.query(
+            `UPDATE procesos SET nombre = ?, descripcion = ? WHERE id = ?`,
             [nombre.trim(), descripcion?.trim() || null, id]
         );
-        if (result.rows.length === 0)
+        if (upd.rowCount === 0)
             return res.status(404).json({ success: false, message: 'Área no encontrada' });
 
-        res.json({ success: true, data: result.rows[0] });
+        const sel = await pool.query('SELECT * FROM procesos WHERE id = ?', [id]);
+        res.json({ success: true, data: sel.rows[0] });
     } catch (error) {
         console.error('Error actualizarProceso:', error.message);
         res.status(500).json({ success: false, message: error.message });
@@ -83,13 +84,13 @@ const eliminarProceso = async (req, res) => {
         const { id } = req.params;
 
         const enUso = await pool.query(
-            `SELECT COUNT(*) FROM equipos WHERE proceso_id = $1 AND eliminado = FALSE`, [id]
+            `SELECT COUNT(*) AS total FROM equipos WHERE proceso_id = ? AND eliminado = FALSE`, [id]
         );
-        if (parseInt(enUso.rows[0].count) > 0)
+        if (parseInt(enUso.rows[0].total) > 0)
             return res.status(400).json({ success: false, message: 'No se puede eliminar: hay equipos asignados a esta área' });
 
-        const result = await pool.query('DELETE FROM procesos WHERE id = $1 RETURNING id', [id]);
-        if (result.rows.length === 0)
+        const result = await pool.query('DELETE FROM procesos WHERE id = ?', [id]);
+        if (result.rowCount === 0)
             return res.status(404).json({ success: false, message: 'Área no encontrada' });
 
         res.json({ success: true, message: 'Área eliminada correctamente' });

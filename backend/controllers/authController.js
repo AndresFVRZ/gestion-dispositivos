@@ -16,6 +16,28 @@ const getTokenExpiry = () => {
     return new Date(Date.now() + 60 * 60 * 1000);
 };
 
+// Adjunta a cada usuario su arreglo `empresas` [{id, nombre}] con una sola consulta.
+// Reemplaza al json_agg/json_build_object de PostgreSQL (no disponible en MariaDB 10.4).
+const attachEmpresas = async (usuarios) => {
+    if (!usuarios.length) return usuarios;
+    const ids = usuarios.map(u => u.id);
+    const { rows } = await pool.query(
+        `SELECT ue.usuario_id, e.id, e.nombre
+         FROM usuario_empresas ue
+         JOIN empresas e ON ue.empresa_id = e.id
+         WHERE ue.usuario_id IN (?)
+         ORDER BY e.nombre`,
+        [ids]
+    );
+    const map = new Map();
+    for (const r of rows) {
+        if (!map.has(r.usuario_id)) map.set(r.usuario_id, []);
+        map.get(r.usuario_id).push({ id: r.id, nombre: r.nombre });
+    }
+    for (const u of usuarios) u.empresas = map.get(u.id) || [];
+    return usuarios;
+};
+
 // ==========================================
 // LOGIN
 // ==========================================
@@ -24,19 +46,19 @@ const login = async (req, res) => {
 
     try {
         const result = await pool.query(
-            `SELECT u.*, r.nombre as rol_nombre 
-             FROM usuarios u 
-             JOIN roles r ON u.rol_id = r.id 
-             WHERE u.email = $1 AND u.estado = 'activo'`,
+            `SELECT u.*, r.nombre as rol_nombre
+             FROM usuarios u
+             JOIN roles r ON u.rol_id = r.id
+             WHERE u.email = ? AND u.estado = 'activo'`,
             [email]
         );
-        
+
         if (result.rows.length === 0) {
             return res.status(401).json({ success: false, message: 'Credenciales inválidas' });
         }
 
         const usuario = result.rows[0];
-        
+
         const passwordValida = await bcrypt.compare(password, usuario.password_hash);
         if (!passwordValida) {
             return res.status(401).json({ success: false, message: 'Credenciales inválidas' });
@@ -48,16 +70,16 @@ const login = async (req, res) => {
                 `SELECT e.id, e.nombre, e.logo
                  FROM usuario_empresas ue
                  JOIN empresas e ON ue.empresa_id = e.id
-                 WHERE ue.usuario_id = $1`,
+                 WHERE ue.usuario_id = ?`,
                 [usuario.id]
             );
             empresasAsignadas = empresasResult.rows;
         }
 
         const token = jwt.sign(
-            { 
-                id: usuario.id, 
-                email: usuario.email, 
+            {
+                id: usuario.id,
+                email: usuario.email,
                 nombre: usuario.nombre,
                 rol: usuario.rol_nombre,
                 rol_id: usuario.rol_id,
@@ -99,12 +121,12 @@ const forgotPassword = async (req, res) => {
     const { email } = req.body;
 
     try {
-        const user = await pool.query('SELECT id, email FROM usuarios WHERE email = $1', [email]);
+        const user = await pool.query('SELECT id, email FROM usuarios WHERE email = ?', [email]);
 
         if (user.rows.length === 0) {
-            return res.json({ 
-                success: true, 
-                message: 'Si el email está registrado, recibirás un enlace de recuperación.' 
+            return res.json({
+                success: true,
+                message: 'Si el email está registrado, recibirás un enlace de recuperación.'
             });
         }
 
@@ -112,7 +134,7 @@ const forgotPassword = async (req, res) => {
         const expiresAt = getTokenExpiry();
 
         await pool.query(
-            'UPDATE usuarios SET reset_token = $1, reset_token_expires_at = $2 WHERE id = $3',
+            'UPDATE usuarios SET reset_token = ?, reset_token_expires_at = ? WHERE id = ?',
             [resetToken, expiresAt, user.rows[0].id]
         );
 
@@ -146,9 +168,9 @@ const forgotPassword = async (req, res) => {
 
         await sendEmail(email, 'Recuperación de Contraseña', html);
 
-        res.json({ 
-            success: true, 
-            message: 'Si el email está registrado, recibirás un enlace de recuperación.' 
+        res.json({
+            success: true,
+            message: 'Si el email está registrado, recibirás un enlace de recuperación.'
         });
     } catch (error) {
         console.error('Error en forgotPassword:', error);
@@ -163,35 +185,35 @@ const resetPassword = async (req, res) => {
     const { token, password } = req.body;
 
     if (!password || password.length < 6) {
-        return res.status(400).json({ 
-            success: false, 
-            message: 'La contraseña debe tener al menos 6 caracteres' 
+        return res.status(400).json({
+            success: false,
+            message: 'La contraseña debe tener al menos 6 caracteres'
         });
     }
 
     try {
         const user = await pool.query(
-            'SELECT id FROM usuarios WHERE reset_token = $1 AND reset_token_expires_at > NOW()',
+            'SELECT id FROM usuarios WHERE reset_token = ? AND reset_token_expires_at > NOW()',
             [token]
         );
 
         if (user.rows.length === 0) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'El enlace ha expirado o es inválido. Solicita un nuevo restablecimiento.' 
+            return res.status(400).json({
+                success: false,
+                message: 'El enlace ha expirado o es inválido. Solicita un nuevo restablecimiento.'
             });
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
 
         await pool.query(
-            'UPDATE usuarios SET password_hash = $1, reset_token = NULL, reset_token_expires_at = NULL WHERE id = $2',
+            'UPDATE usuarios SET password_hash = ?, reset_token = NULL, reset_token_expires_at = NULL WHERE id = ?',
             [hashedPassword, user.rows[0].id]
         );
 
-        res.json({ 
-            success: true, 
-            message: 'Contraseña restablecida correctamente. Ya puedes iniciar sesión.' 
+        res.json({
+            success: true,
+            message: 'Contraseña restablecida correctamente. Ya puedes iniciar sesión.'
         });
     } catch (error) {
         console.error('Error en resetPassword:', error);
@@ -208,58 +230,58 @@ const cambiarPassword = async (req, res) => {
 
     // Verificar que el usuario solo pueda cambiar su propia contraseña
     if (parseInt(id) !== req.usuario.id) {
-        return res.status(403).json({ 
-            success: false, 
-            message: 'No puedes cambiar la contraseña de otro usuario' 
+        return res.status(403).json({
+            success: false,
+            message: 'No puedes cambiar la contraseña de otro usuario'
         });
     }
 
     if (!newPassword || newPassword.length < 6) {
-        return res.status(400).json({ 
-            success: false, 
-            message: 'La nueva contraseña debe tener al menos 6 caracteres' 
+        return res.status(400).json({
+            success: false,
+            message: 'La nueva contraseña debe tener al menos 6 caracteres'
         });
     }
 
     try {
         // Obtener el usuario actual
         const result = await pool.query(
-            'SELECT password_hash FROM usuarios WHERE id = $1',
+            'SELECT password_hash FROM usuarios WHERE id = ?',
             [id]
         );
 
         if (result.rows.length === 0) {
-            return res.status(404).json({ 
-                success: false, 
-                message: 'Usuario no encontrado' 
+            return res.status(404).json({
+                success: false,
+                message: 'Usuario no encontrado'
             });
         }
 
         // Verificar la contraseña actual
         const passwordValida = await bcrypt.compare(currentPassword, result.rows[0].password_hash);
         if (!passwordValida) {
-            return res.status(401).json({ 
-                success: false, 
-                message: 'Contraseña actual incorrecta' 
+            return res.status(401).json({
+                success: false,
+                message: 'Contraseña actual incorrecta'
             });
         }
 
         // Hashear y guardar nueva contraseña
         const hashedPassword = await bcrypt.hash(newPassword, 10);
         await pool.query(
-            'UPDATE usuarios SET password_hash = $1 WHERE id = $2',
+            'UPDATE usuarios SET password_hash = ? WHERE id = ?',
             [hashedPassword, id]
         );
 
-        res.json({ 
-            success: true, 
-            message: 'Contraseña actualizada correctamente' 
+        res.json({
+            success: true,
+            message: 'Contraseña actualizada correctamente'
         });
     } catch (error) {
         console.error('Error en cambiarPassword:', error);
-        res.status(500).json({ 
-            success: false, 
-            message: error.message 
+        res.status(500).json({
+            success: false,
+            message: error.message
         });
     }
 };
@@ -269,21 +291,15 @@ const cambiarPassword = async (req, res) => {
 // ==========================================
 const getUsuarios = async (req, res) => {
     try {
-        const query = `
+        const result = await pool.query(`
             SELECT u.id, u.nombre, u.email, u.estado, u.created_at,
-                   r.id as rol_id, r.nombre as rol,
-                   COALESCE(
-                       (SELECT json_agg(json_build_object('id', e.id, 'nombre', e.nombre))
-                        FROM usuario_empresas ue
-                        JOIN empresas e ON ue.empresa_id = e.id
-                        WHERE ue.usuario_id = u.id), '[]'
-                   ) as empresas
+                   r.id as rol_id, r.nombre as rol
             FROM usuarios u
             JOIN roles r ON u.rol_id = r.id
             ORDER BY u.id
-        `;
-        
-        const result = await pool.query(query);
+        `);
+
+        await attachEmpresas(result.rows);
         res.json({ success: true, data: result.rows, total: result.rows.length });
     } catch (error) {
         console.error('Error en getUsuarios:', error);
@@ -297,27 +313,20 @@ const getUsuarios = async (req, res) => {
 const getUsuarioById = async (req, res) => {
     try {
         const { id } = req.params;
-        
-        const query = `
+
+        const result = await pool.query(`
             SELECT u.id, u.nombre, u.email, u.estado, u.created_at,
-                   r.id as rol_id, r.nombre as rol,
-                   COALESCE(
-                       (SELECT json_agg(json_build_object('id', e.id, 'nombre', e.nombre))
-                        FROM usuario_empresas ue
-                        JOIN empresas e ON ue.empresa_id = e.id
-                        WHERE ue.usuario_id = u.id), '[]'
-                   ) as empresas
+                   r.id as rol_id, r.nombre as rol
             FROM usuarios u
             JOIN roles r ON u.rol_id = r.id
-            WHERE u.id = $1
-        `;
-        
-        const result = await pool.query(query, [id]);
-        
+            WHERE u.id = ?
+        `, [id]);
+
         if (result.rows.length === 0) {
             return res.status(404).json({ success: false, message: 'Usuario no encontrado' });
         }
-        
+
+        await attachEmpresas(result.rows);
         res.json({ success: true, data: result.rows[0] });
     } catch (error) {
         console.error('Error en getUsuarioById:', error);
@@ -333,38 +342,41 @@ const crearUsuario = async (req, res) => {
 
     try {
         if (!nombre || !email || !password || !rol_id) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'Faltan campos requeridos' 
+            return res.status(400).json({
+                success: false,
+                message: 'Faltan campos requeridos'
             });
         }
 
-        const existe = await pool.query('SELECT id FROM usuarios WHERE email = $1', [email]);
+        const existe = await pool.query('SELECT id FROM usuarios WHERE email = ?', [email]);
         if (existe.rows.length > 0) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'El email ya está registrado' 
+            return res.status(400).json({
+                success: false,
+                message: 'El email ya está registrado'
             });
         }
 
-        const rolResult = await pool.query('SELECT nombre FROM roles WHERE id = $1', [rol_id]);
+        const rolResult = await pool.query('SELECT nombre FROM roles WHERE id = ?', [rol_id]);
         const rolNombre = rolResult.rows[0]?.nombre;
 
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        const result = await pool.query(
+        const ins = await pool.query(
             `INSERT INTO usuarios (nombre, email, password_hash, rol_id, estado, created_at)
-             VALUES ($1, $2, $3, $4, 'activo', NOW())
-             RETURNING id, nombre, email, rol_id, estado, created_at`,
+             VALUES (?, ?, ?, ?, 'activo', NOW())`,
             [nombre, email, hashedPassword, rol_id]
         );
 
-        const nuevoUsuario = result.rows[0];
+        const sel = await pool.query(
+            `SELECT id, nombre, email, rol_id, estado, created_at FROM usuarios WHERE id = ?`,
+            [ins.insertId]
+        );
+        const nuevoUsuario = sel.rows[0];
 
         if (empresas_ids && empresas_ids.length > 0 && rolNombre !== 'super_admin') {
             for (const empresaId of empresas_ids) {
                 await pool.query(
-                    `INSERT INTO usuario_empresas (usuario_id, empresa_id) VALUES ($1, $2)`,
+                    `INSERT INTO usuario_empresas (usuario_id, empresa_id) VALUES (?, ?)`,
                     [nuevoUsuario.id, empresaId]
                 );
             }
@@ -377,9 +389,9 @@ const crearUsuario = async (req, res) => {
         });
     } catch (error) {
         console.error('Error en crearUsuario:', error);
-        res.status(500).json({ 
-            success: false, 
-            message: error.message 
+        res.status(500).json({
+            success: false,
+            message: error.message
         });
     }
 };
@@ -392,40 +404,40 @@ const actualizarUsuario = async (req, res) => {
     const { nombre, email, rol_id, estado, empresas_ids } = req.body;
 
     try {
-        const existe = await pool.query('SELECT id FROM usuarios WHERE id = $1', [id]);
+        const existe = await pool.query('SELECT id FROM usuarios WHERE id = ?', [id]);
         if (existe.rows.length === 0) {
-            return res.status(404).json({ 
-                success: false, 
-                message: 'Usuario no encontrado' 
+            return res.status(404).json({
+                success: false,
+                message: 'Usuario no encontrado'
             });
         }
 
         await pool.query(
-            `UPDATE usuarios 
-             SET nombre = $1, email = $2, rol_id = $3, estado = $4
-             WHERE id = $5`,
+            `UPDATE usuarios
+             SET nombre = ?, email = ?, rol_id = ?, estado = ?
+             WHERE id = ?`,
             [nombre, email, rol_id, estado, id]
         );
 
         if (empresas_ids !== undefined) {
-            await pool.query('DELETE FROM usuario_empresas WHERE usuario_id = $1', [id]);
+            await pool.query('DELETE FROM usuario_empresas WHERE usuario_id = ?', [id]);
             for (const empresaId of empresas_ids) {
                 await pool.query(
-                    `INSERT INTO usuario_empresas (usuario_id, empresa_id) VALUES ($1, $2)`,
+                    `INSERT INTO usuario_empresas (usuario_id, empresa_id) VALUES (?, ?)`,
                     [id, empresaId]
                 );
             }
         }
 
-        res.json({ 
-            success: true, 
-            message: 'Usuario actualizado exitosamente' 
+        res.json({
+            success: true,
+            message: 'Usuario actualizado exitosamente'
         });
     } catch (error) {
         console.error('Error en actualizarUsuario:', error);
-        res.status(500).json({ 
-            success: false, 
-            message: error.message 
+        res.status(500).json({
+            success: false,
+            message: error.message
         });
     }
 };
@@ -437,39 +449,39 @@ const eliminarUsuario = async (req, res) => {
     const { id } = req.params;
 
     try {
-        const existe = await pool.query('SELECT id FROM usuarios WHERE id = $1', [id]);
+        const existe = await pool.query('SELECT id FROM usuarios WHERE id = ?', [id]);
         if (existe.rows.length === 0) {
-            return res.status(404).json({ 
-                success: false, 
-                message: 'Usuario no encontrado' 
+            return res.status(404).json({
+                success: false,
+                message: 'Usuario no encontrado'
             });
         }
 
         if (parseInt(id) === req.usuario.id) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'No puedes eliminar tu propio usuario' 
+            return res.status(400).json({
+                success: false,
+                message: 'No puedes eliminar tu propio usuario'
             });
         }
 
-        await pool.query('DELETE FROM usuario_empresas WHERE usuario_id = $1', [id]);
-        await pool.query('UPDATE usuarios SET estado = $1 WHERE id = $2', ['inactivo', id]);
+        await pool.query('DELETE FROM usuario_empresas WHERE usuario_id = ?', [id]);
+        await pool.query('UPDATE usuarios SET estado = ? WHERE id = ?', ['inactivo', id]);
 
-        res.json({ 
-            success: true, 
-            message: 'Usuario eliminado correctamente' 
+        res.json({
+            success: true,
+            message: 'Usuario eliminado correctamente'
         });
     } catch (error) {
         console.error('Error en eliminarUsuario:', error);
-        res.status(500).json({ 
-            success: false, 
-            message: error.message 
+        res.status(500).json({
+            success: false,
+            message: error.message
         });
     }
 };
 
-module.exports = { 
-    login, 
+module.exports = {
+    login,
     verifyToken,
     forgotPassword,
     resetPassword,

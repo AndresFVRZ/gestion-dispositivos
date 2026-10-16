@@ -35,7 +35,12 @@ function ForgotPassword() {
     <div className="auth-page">
       <div className="auth-brand">
         <div className="auth-brand-inner">
-          <div className="auth-brand-logo">GE</div>
+          <div
+            className="auth-brand-logo"
+            style={{ width: 400, height: 190, maxWidth: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 28 }}
+          >
+            <img src="/favicon.png" alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+          </div>
           <h1 className="auth-brand-title">Gestión de Equipos</h1>
           <p className="auth-brand-sub">Recupera el acceso a tu cuenta de forma segura</p>
           <div className="auth-brand-features">
@@ -124,13 +129,13 @@ fpStyles.textContent = `
     content: ''; position: absolute; width: 300px; height: 300px;
     background: rgba(255,255,255,0.03); border-radius: 50%; bottom: -80px; left: -80px;
   }
-  .auth-brand-inner { position: relative; z-index: 1; max-width: 340px; }
+  .auth-brand-inner { position: relative; z-index: 1; max-width: 420px; }
   .auth-brand-logo {
-    width: 72px; height: 72px; background: linear-gradient(135deg, #3b82f6, #2563eb);
-    border-radius: 20px; display: flex; align-items: center; justify-content: center;
-    font-size: 30px; font-weight: 800; color: white; margin-bottom: 28px;
-    box-shadow: 0 12px 32px rgba(37,99,235,0.4);
+    width: 400px; height: 190px;
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 28px;
   }
+  .auth-brand-logo img { width: 100%; height: 100%; object-fit: contain; }
   .auth-brand-title { font-size: 30px; font-weight: 700; color: white; margin: 0 0 12px 0; line-height: 1.2; }
   .auth-brand-sub   { font-size: 15px; color: rgba(255,255,255,0.6); margin: 0 0 40px 0; line-height: 1.6; }
   .auth-brand-features { display: flex; flex-direction: column; gap: 14px; }

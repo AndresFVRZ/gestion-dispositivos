@@ -227,10 +227,10 @@ function GestionDashboard() {
                 <p className="gd-quick-desc">Lista completa de equipos</p>
               </div>
             </button>
-            <button className="gd-quick-item" onClick={() => navigate('/historial')}>
+            <button className="gd-quick-item" onClick={() => navigate('/auditoria')}>
               <span className="gd-quick-icon" style={{ background: '#fefce8', color: '#d97706' }}>📋</span>
               <div>
-                <p className="gd-quick-name">Historial</p>
+                <p className="gd-quick-name">Auditoría</p>
                 <p className="gd-quick-desc">Registro de cambios</p>
               </div>
             </button>

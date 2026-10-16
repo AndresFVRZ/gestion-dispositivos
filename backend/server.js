@@ -4,7 +4,7 @@ const cors = require('cors');
 const jwt = require('jsonwebtoken');
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5080;
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
@@ -31,7 +31,7 @@ app.use(async (req, res, next) => {
 const authRoutes = require('./routes/auth');
 const empresaRoutes = require('./routes/empresas');
 const equipoRoutes = require('./routes/equipos');
-const historialRoutes = require('./routes/historial');
+const auditoriaRoutes = require('./routes/auditoria');
 const usuariosRoutes = require('./routes/usuarios');
 const sedesRoutes = require('./routes/sedes');
 const placasRoutes = require('./routes/placas');
@@ -47,7 +47,7 @@ app.get('/', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/empresas', empresaRoutes);
 app.use('/api/equipos', equipoRoutes);
-app.use('/api/historial', historialRoutes);
+app.use('/api/auditoria', auditoriaRoutes);
 app.use('/api/usuarios', usuariosRoutes);
 app.use('/api/sedes', sedesRoutes);
 app.use('/api/placas', placasRoutes);

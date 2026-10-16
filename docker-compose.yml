@@ -1,0 +1,79 @@
+# Stack de desarrollo en contenedores: db (MariaDB) + backend (Express) + frontend (Vite)
+# Uso:  docker compose up --build      (Ctrl+C para parar)
+#       docker compose down            (parar y borrar contenedores)
+#       docker compose down -v         (además borra los datos de la BD -> se re-importa el volcado)
+
+services:
+  # ----------------------------------------------------------------
+  #  Base de datos - MariaDB 10.4 (misma versión que XAMPP)
+  #  En el primer arranque importa backend/db/*.sql automáticamente.
+  # ----------------------------------------------------------------
+  db:
+    image: mariadb:10.4
+    container_name: gestion_db
+    restart: unless-stopped
+    environment:
+      MYSQL_ALLOW_EMPTY_PASSWORD: "yes"   # solo para desarrollo local
+      MYSQL_DATABASE: lucoa
+    ports:
+      - "3307:3306"        # host 3307 para no chocar con el MySQL de XAMPP (3306)
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./backend/db/schema_mariadb.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+      - ./backend/db/data_mariadb.sql:/docker-entrypoint-initdb.d/02_data.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  # ----------------------------------------------------------------
+  #  Backend - Express + mysql2 (nodemon, hot-reload)
+  # ----------------------------------------------------------------
+  backend:
+    build:
+      context: ./backend
+    container_name: gestion_backend
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env            # SECRET_KEY, SMTP_*, APP_URL, PORT...
+    environment:
+      DB_HOST: db                 # <- apunta al servicio de la red de compose
+      DB_PORT: "3306"
+      DB_USER: root
+      DB_PASSWORD: ""
+      DB_NAME: lucoa
+      # PORT lo trae backend/.env (5080)
+    ports:
+      - "5080:5080"
+    volumes:
+      - ./backend:/app                 # código en vivo
+      - backend_node_modules:/app/node_modules   # deps de la imagen, no las del host
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # ----------------------------------------------------------------
+  #  Frontend - Vite + React (HMR)
+  # ----------------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+    container_name: gestion_frontend
+    restart: unless-stopped
+    environment:
+      VITE_API_URL: http://localhost:5080/api   # lo consume el navegador (host)
+      VITE_USE_POLLING: "true"                  # watch de archivos en Docker/Windows
+    ports:
+      - "5180:5180"       # si el 5180 está ocupado, cambia a "5181:5180"
+    volumes:
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules
+    depends_on:
+      - backend
+
+volumes:
+  db_data:
+  backend_node_modules:
+  frontend_node_modules:

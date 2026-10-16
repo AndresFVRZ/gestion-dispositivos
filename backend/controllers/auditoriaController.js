@@ -1,10 +1,10 @@
 const pool = require('../config/db');
 
-const getHistorial = async (req, res) => {
+const getAuditoria = async (req, res) => {
     try {
         const { limite = 100, offset = 0, accion, fecha_desde, fecha_hasta, sin_limite } = req.query;
         const usuario = req.usuario;
-        
+
         let query = `
             SELECT h.*,
                    CASE
@@ -24,48 +24,43 @@ const getHistorial = async (req, res) => {
             FROM historial_acciones h
             WHERE 1=1
         `;
-        
+
         let params = [];
-        let paramCount = 1;
-        
+
         if (usuario.rol !== 'super_admin') {
             const empresaIds = (usuario.empresas || []).map(e => e.id);
             if (empresaIds.length > 0) {
-                query += ` AND h.empresa_id = ANY($${paramCount}::int[])`;
+                query += ` AND h.empresa_id IN (?)`;
                 params.push(empresaIds);
-                paramCount++;
             }
         }
-        
+
         if (accion && accion !== 'todos') {
-            query += ` AND h.accion = $${paramCount}`;
+            query += ` AND h.accion = ?`;
             params.push(accion);
-            paramCount++;
         }
-        
+
         if (fecha_desde) {
-            query += ` AND h.fecha >= $${paramCount}`;
+            query += ` AND h.fecha >= ?`;
             params.push(fecha_desde);
-            paramCount++;
         }
-        
+
         if (fecha_hasta) {
-            query += ` AND h.fecha <= $${paramCount}`;
+            query += ` AND h.fecha <= ?`;
             params.push(fecha_hasta);
-            paramCount++;
         }
-        
+
         if (sin_limite === 'true') {
             query += ` ORDER BY h.fecha DESC`;
         } else {
-            query += ` ORDER BY h.fecha DESC LIMIT $${paramCount} OFFSET $${paramCount + 1}`;
-            params.push(limite, offset);
+            query += ` ORDER BY h.fecha DESC LIMIT ? OFFSET ?`;
+            params.push(parseInt(limite, 10) || 100, parseInt(offset, 10) || 0);
         }
-        
+
         const result = await pool.query(query, params);
-        
+
         const totalResult = await pool.query('SELECT COUNT(*) as total FROM historial_acciones');
-        
+
         res.json({
             success: true,
             data: result.rows,
@@ -74,9 +69,9 @@ const getHistorial = async (req, res) => {
             offset: parseInt(offset)
         });
     } catch (error) {
-        console.error('Error en getHistorial:', error);
+        console.error('Error en getAuditoria:', error);
         res.status(500).json({ success: false, message: error.message });
     }
 };
 
-module.exports = { getHistorial };
+module.exports = { getAuditoria };

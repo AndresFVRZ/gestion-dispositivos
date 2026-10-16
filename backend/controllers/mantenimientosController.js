@@ -1,5 +1,5 @@
 const pool = require('../config/db');
-const { registrarHistorial } = require('../utils/helpers');
+const { registrarAuditoria } = require('../utils/helpers');
 
 const TIPOS_VALIDOS = ['Preventivo', 'Correctivo', 'Actualización', 'Limpieza', 'Diagnóstico', 'Otro'];
 
@@ -9,20 +9,19 @@ const getMantenimientos = async (req, res) => {
         const { equipo_id, empresa_id, tipo } = req.query;
         let conditions = [];
         let params = [];
-        let i = 1;
 
         if (usuario.rol !== 'super_admin') {
             const empresaIds = (usuario.empresas || []).map(e => e.id);
             if (empresaIds.length === 0) return res.json({ success: true, data: [] });
-            conditions.push(`eq.empresa_id = ANY($${i++}::int[])`);
+            conditions.push(`eq.empresa_id IN (?)`);
             params.push(empresaIds);
         } else if (empresa_id) {
-            conditions.push(`eq.empresa_id = $${i++}`);
+            conditions.push(`eq.empresa_id = ?`);
             params.push(empresa_id);
         }
 
-        if (equipo_id) { conditions.push(`m.equipo_id = $${i++}`); params.push(equipo_id); }
-        if (tipo)      { conditions.push(`m.tipo = $${i++}`);       params.push(tipo); }
+        if (equipo_id) { conditions.push(`m.equipo_id = ?`); params.push(equipo_id); }
+        if (tipo)      { conditions.push(`m.tipo = ?`);       params.push(tipo); }
 
         const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
@@ -54,7 +53,7 @@ const crearMantenimiento = async (req, res) => {
             return res.status(400).json({ success: false, message: `Tipo inválido. Opciones: ${TIPOS_VALIDOS.join(', ')}` });
 
         const equipoActual = await pool.query(
-            `SELECT id, codigo, nombre_equipo, empresa_id, estado FROM equipos WHERE id = $1 AND eliminado = FALSE`,
+            `SELECT id, codigo, nombre_equipo, empresa_id, estado FROM equipos WHERE id = ? AND eliminado = FALSE`,
             [equipo_id]
         );
         if (equipoActual.rows.length === 0)
@@ -67,21 +66,23 @@ const crearMantenimiento = async (req, res) => {
         try {
             await client.query('BEGIN');
 
-            const result = await client.query(
+            const ins = await client.query(
                 `INSERT INTO mantenimientos (equipo_id, fecha_mantenimiento, tipo, descripcion, tecnico, costo, estado_anterior, created_at)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, NOW()) RETURNING *`,
+                 VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`,
                 [equipo_id, fecha_mantenimiento, tipo, descripcion?.trim() || null, tecnico?.trim() || null, costo || null, estadoAnterior]
             );
 
-            await client.query(`UPDATE equipos SET estado = 'Mantenimiento' WHERE id = $1`, [equipo_id]);
+            await client.query(`UPDATE equipos SET estado = 'Mantenimiento' WHERE id = ?`, [equipo_id]);
+
+            const sel = await client.query(`SELECT * FROM mantenimientos WHERE id = ?`, [ins.insertId]);
 
             await client.query('COMMIT');
 
-            await registrarHistorial(pool, req, 'MANTENIMIENTO_CREAR', equipo,
+            await registrarAuditoria(pool, req, 'MANTENIMIENTO_CREAR', equipo,
                 `Mantenimiento ${tipo} registrado. Técnico: ${tecnico || 'N/A'}. Estado anterior: ${estadoAnterior}`
             );
 
-            res.status(201).json({ success: true, data: result.rows[0] });
+            res.status(201).json({ success: true, data: sel.rows[0] });
         } catch (err) {
             await client.query('ROLLBACK');
             throw err;
@@ -104,26 +105,28 @@ const actualizarMantenimiento = async (req, res) => {
         if (!TIPOS_VALIDOS.includes(tipo))
             return res.status(400).json({ success: false, message: `Tipo inválido. Opciones: ${TIPOS_VALIDOS.join(', ')}` });
 
-        const result = await pool.query(
+        const upd = await pool.query(
             `UPDATE mantenimientos
-             SET equipo_id = $1, fecha_mantenimiento = $2, tipo = $3,
-                 descripcion = $4, tecnico = $5, costo = $6
-             WHERE id = $7 RETURNING *`,
+             SET equipo_id = ?, fecha_mantenimiento = ?, tipo = ?,
+                 descripcion = ?, tecnico = ?, costo = ?
+             WHERE id = ?`,
             [equipo_id, fecha_mantenimiento, tipo, descripcion?.trim() || null, tecnico?.trim() || null, costo || null, id]
         );
-        if (result.rows.length === 0)
+        if (upd.rowCount === 0)
             return res.status(404).json({ success: false, message: 'Mantenimiento no encontrado' });
 
+        const mantRes = await pool.query(`SELECT * FROM mantenimientos WHERE id = ?`, [id]);
+
         const equipoRes = await pool.query(
-            `SELECT id, codigo, nombre_equipo, empresa_id FROM equipos WHERE id = $1`, [equipo_id]
+            `SELECT id, codigo, nombre_equipo, empresa_id FROM equipos WHERE id = ?`, [equipo_id]
         );
         const equipo = equipoRes.rows[0];
 
-        await registrarHistorial(pool, req, 'MANTENIMIENTO_EDITAR', equipo,
+        await registrarAuditoria(pool, req, 'MANTENIMIENTO_EDITAR', equipo,
             `Mantenimiento ${tipo} actualizado. Técnico: ${tecnico || 'N/A'}`
         );
 
-        res.json({ success: true, data: result.rows[0] });
+        res.json({ success: true, data: mantRes.rows[0] });
     } catch (error) {
         console.error('Error actualizarMantenimiento:', error.message);
         res.status(500).json({ success: false, message: error.message });
@@ -138,16 +141,16 @@ const eliminarMantenimiento = async (req, res) => {
             `SELECT m.*, eq.codigo, eq.nombre_equipo, eq.empresa_id
              FROM mantenimientos m
              JOIN equipos eq ON m.equipo_id = eq.id
-             WHERE m.id = $1`, [id]
+             WHERE m.id = ?`, [id]
         );
 
-        const result = await pool.query('DELETE FROM mantenimientos WHERE id = $1 RETURNING id', [id]);
-        if (result.rows.length === 0)
+        const result = await pool.query('DELETE FROM mantenimientos WHERE id = ?', [id]);
+        if (result.rowCount === 0)
             return res.status(404).json({ success: false, message: 'Mantenimiento no encontrado' });
 
         if (mantRes.rows.length > 0) {
             const m = mantRes.rows[0];
-            await registrarHistorial(pool, req, 'MANTENIMIENTO_ELIMINAR',
+            await registrarAuditoria(pool, req, 'MANTENIMIENTO_ELIMINAR',
                 { id: m.equipo_id, codigo: m.codigo, nombre_equipo: m.nombre_equipo, empresa_id: m.empresa_id },
                 `Mantenimiento ${m.tipo} eliminado. Fecha: ${m.fecha_mantenimiento}`
             );
@@ -169,7 +172,7 @@ const completarMantenimiento = async (req, res) => {
             `SELECT m.*, eq.codigo, eq.nombre_equipo, eq.empresa_id
              FROM mantenimientos m
              JOIN equipos eq ON m.equipo_id = eq.id
-             WHERE m.id = $1`, [id]
+             WHERE m.id = ?`, [id]
         );
         if (mantRes.rows.length === 0)
             return res.status(404).json({ success: false, message: 'Mantenimiento no encontrado' });
@@ -178,19 +181,20 @@ const completarMantenimiento = async (req, res) => {
         if (mant.estado_mant !== 'activo')
             return res.status(400).json({ success: false, message: 'Solo se puede completar un mantenimiento activo' });
 
-        const result = await pool.query(
+        await pool.query(
             `UPDATE mantenimientos
-             SET estado_mant = 'completado', fecha_completado = NOW(), notas_completado = $1
-             WHERE id = $2 RETURNING *`,
+             SET estado_mant = 'completado', fecha_completado = NOW(), notas_completado = ?
+             WHERE id = ?`,
             [notas_completado?.trim() || null, id]
         );
+        const sel = await pool.query(`SELECT * FROM mantenimientos WHERE id = ?`, [id]);
 
-        await registrarHistorial(pool, req, 'MANTENIMIENTO_COMPLETAR',
+        await registrarAuditoria(pool, req, 'MANTENIMIENTO_COMPLETAR',
             { id: mant.equipo_id, codigo: mant.codigo, nombre_equipo: mant.nombre_equipo, empresa_id: mant.empresa_id },
             `Mantenimiento marcado como completado. ${notas_completado ? 'Notas: ' + notas_completado : ''}`
         );
 
-        res.json({ success: true, data: result.rows[0], message: 'Mantenimiento marcado como completado' });
+        res.json({ success: true, data: sel.rows[0], message: 'Mantenimiento marcado como completado' });
     } catch (error) {
         console.error('Error completarMantenimiento:', error.message);
         res.status(500).json({ success: false, message: error.message });
@@ -207,7 +211,7 @@ const aprobarMantenimiento = async (req, res) => {
             `SELECT m.*, eq.codigo, eq.nombre_equipo, eq.empresa_id
              FROM mantenimientos m
              JOIN equipos eq ON m.equipo_id = eq.id
-             WHERE m.id = $1`, [id]
+             WHERE m.id = ?`, [id]
         );
         if (mantRes.rows.length === 0)
             return res.status(404).json({ success: false, message: 'Mantenimiento no encontrado' });
@@ -220,29 +224,31 @@ const aprobarMantenimiento = async (req, res) => {
         try {
             await client.query('BEGIN');
 
-            const result = await client.query(
+            await client.query(
                 `UPDATE mantenimientos
                  SET estado_mant = 'aprobado', fecha_aprobacion = NOW(),
-                     notas_aprobacion = $1, aprobado_por = $2
-                 WHERE id = $3 RETURNING *`,
+                     notas_aprobacion = ?, aprobado_por = ?
+                 WHERE id = ?`,
                 [notas_aprobacion?.trim() || null, usuarioId, id]
             );
 
             // Restaurar estado anterior del equipo
             const estadoRestaurar = mant.estado_anterior || 'Disponible';
             await client.query(
-                `UPDATE equipos SET estado = $1 WHERE id = $2`,
+                `UPDATE equipos SET estado = ? WHERE id = ?`,
                 [estadoRestaurar, mant.equipo_id]
             );
 
+            const sel = await client.query(`SELECT * FROM mantenimientos WHERE id = ?`, [id]);
+
             await client.query('COMMIT');
 
-            await registrarHistorial(pool, req, 'MANTENIMIENTO_APROBAR',
+            await registrarAuditoria(pool, req, 'MANTENIMIENTO_APROBAR',
                 { id: mant.equipo_id, codigo: mant.codigo, nombre_equipo: mant.nombre_equipo, empresa_id: mant.empresa_id },
                 `Mantenimiento aprobado. Equipo restaurado a estado: ${estadoRestaurar}`
             );
 
-            res.json({ success: true, data: result.rows[0], message: `Mantenimiento aprobado. Equipo restaurado a "${estadoRestaurar}"` });
+            res.json({ success: true, data: sel.rows[0], message: `Mantenimiento aprobado. Equipo restaurado a "${estadoRestaurar}"` });
         } catch (err) {
             await client.query('ROLLBACK');
             throw err;
@@ -265,7 +271,7 @@ const rechazarMantenimiento = async (req, res) => {
             `SELECT m.*, eq.codigo, eq.nombre_equipo, eq.empresa_id
              FROM mantenimientos m
              JOIN equipos eq ON m.equipo_id = eq.id
-             WHERE m.id = $1`, [id]
+             WHERE m.id = ?`, [id]
         );
         if (mantRes.rows.length === 0)
             return res.status(404).json({ success: false, message: 'Mantenimiento no encontrado' });
@@ -274,20 +280,21 @@ const rechazarMantenimiento = async (req, res) => {
         if (mant.estado_mant !== 'completado')
             return res.status(400).json({ success: false, message: 'Solo se puede rechazar un mantenimiento completado' });
 
-        const result = await pool.query(
+        await pool.query(
             `UPDATE mantenimientos
              SET estado_mant = 'rechazado', fecha_aprobacion = NOW(),
-                 notas_aprobacion = $1, aprobado_por = $2
-             WHERE id = $3 RETURNING *`,
+                 notas_aprobacion = ?, aprobado_por = ?
+             WHERE id = ?`,
             [notas_aprobacion?.trim() || null, usuarioId, id]
         );
+        const sel = await pool.query(`SELECT * FROM mantenimientos WHERE id = ?`, [id]);
 
-        await registrarHistorial(pool, req, 'MANTENIMIENTO_RECHAZAR',
+        await registrarAuditoria(pool, req, 'MANTENIMIENTO_RECHAZAR',
             { id: mant.equipo_id, codigo: mant.codigo, nombre_equipo: mant.nombre_equipo, empresa_id: mant.empresa_id },
             `Mantenimiento rechazado. Equipo permanece en estado Mantenimiento. ${notas_aprobacion ? 'Razón: ' + notas_aprobacion : ''}`
         );
 
-        res.json({ success: true, data: result.rows[0], message: 'Mantenimiento rechazado. El equipo permanece en estado Mantenimiento' });
+        res.json({ success: true, data: sel.rows[0], message: 'Mantenimiento rechazado. El equipo permanece en estado Mantenimiento' });
     } catch (error) {
         console.error('Error rechazarMantenimiento:', error.message);
         res.status(500).json({ success: false, message: error.message });

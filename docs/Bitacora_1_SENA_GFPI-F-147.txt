@@ -1,0 +1,220 @@
+================================================================================
+FORMATO BITÁCORA DE SEGUIMIENTO ETAPA PRODUCTIVA
+Código: GFPI-F-147                                              Versión: 05
+PROCESO: GESTIÓN DE FORMACIÓN PROFESIONAL INTEGRAL
+================================================================================
+CLASIFICACIÓN DE LA INFORMACIÓN:  [ ] Pública   [ ] Pública Clasificada   [ ] Pública Reservada
+================================================================================
+
+BITÁCORA N°: 1
+PERÍODO A REPORTAR: Desde 28/04/2026 hasta 30/04/2026
+
+================================================================================
+DATOS DEL APRENDIZ
+================================================================================
+Nombre completo del aprendiz    : Andres Felipe Vergara Robles
+Tipo de documento               : Cédula de ciudadanía
+Número de identificación        : 1028860882
+Contacto telefónico             : 3219841628
+Correo electrónico institucional: vergararoblesandresfelipe204@gmail.com
+Correo electrónico personal     : vergararoblesandresfelipe204@gmail.com
+Dirección de residencia         : Cll 23a #2b- 36
+Número de grupo                 : 3233827
+Modalidad de formación          : Presencial
+Programa de formación           : PROGRAMACION DE SOFTWARE
+Modalidad de ejecución (EP)     : Presencial
+¿Etapa productiva en exterior?  : No
+País                            : Colombia
+
+================================================================================
+DATOS DEL ENTE CO-FORMADOR
+================================================================================
+Nombre de la entidad            : EMTRA S EN C
+NIT                             : 900278019
+Dirección                       : Km. 2 Vía Funza - Siberia
+
+================================================================================
+DATOS DE LA PERSONA ENCARGADA DEL PROCESO FORMATIVO
+================================================================================
+Nombre (Jefe inmediato/Supervisor): Juan Carlos Olarte
+Cargo                             : Coordinador sistemas
+Contacto telefónico               : 300 6602560
+Correo electrónico                : juan.olarte@solucionescorp.com.co
+
+================================================================================
+DATOS DEL INSTRUCTOR DE SEGUIMIENTO
+================================================================================
+Nombre completo : VIVIAN ANDREA PERILLA CORTES
+Correo          : vperilla@sena.edu.co
+
+================================================================================
+ALTERNATIVA DE ETAPA PRODUCTIVA
+================================================================================
+[X] Contrato de aprendizaje        [ ] Monitoria
+[ ] Proyecto productivo            [ ] Vínculo laboral
+[ ] Contrato de vínculo formativo
+
+================================================================================
+DESCRIPCIÓN DE LAS ACTIVIDADES REALIZADAS
+================================================================================
+
+ACTIVIDAD 1
+-----------
+Descripción:
+  Se realizó el análisis de requerimientos del sistema de gestión de turnos
+  para empresa EMTRA EMT (Empresa de transporte), identificando las entidades
+  principales que conformarían la base de datos.
+
+Competencias aplicadas:
+  Gestión bases de datos: Se aplicó el conocimiento de sistemas gestores de
+  bases de datos relacionales (PostgreSQL) para diseñar, crear y estructurar
+  las tablas del sistema, definiendo tipos de datos, llaves primarias, llaves
+  foráneas, restricciones de integridad e índices para optimizar las consultas.
+
+Fecha de inicio : 28/04/2026
+Fecha de fin    : 30/04/2026
+
+Evidencia de cumplimiento:
+  Documento de análisis de requerimientos del sistema de gestión de turnos.
+
+Observaciones / Dificultades:
+  Se identificó la necesidad de implementar una arquitectura multi-tenant desde
+  el inicio del proyecto, lo cual implicó rediseñar el modelo de datos para
+  incluir el campo empresa_id en todas las tablas principales.
+
+--------------------------------------------------------------------------------
+
+ACTIVIDAD 2
+-----------
+Descripción:
+  A partir de este análisis se diseñó el modelo entidad-relación contemplando
+  las siguientes tablas: empresas, usuarios, empleados, procesos, sedes,
+  tarjetas, etc.
+
+Competencias aplicadas:
+  Analizar y diseñar sistemas de información: se aplicó la metodología de
+  análisis de requerimientos para identificar las entidades del negocio,
+  sus atributos y relaciones.
+
+Fecha de inicio : 28/04/2026
+Fecha de fin    : 30/04/2026
+
+Evidencia de cumplimiento:
+  Diagrama de entidad-relación con las 14 tablas diseñadas para la base
+  de datos.
+
+Observaciones / Dificultades:
+  Se presentó una dificultad inicial al definir la relación entre empleados,
+  turnos y marcaciones, ya que un empleado puede cambiar de turno en el tiempo.
+
+--------------------------------------------------------------------------------
+
+ACTIVIDAD 3
+-----------
+Descripción:
+  Se definió una arquitectura multi-tenant donde cada tabla principal incluyó
+  el campo empresa_id como llave foránea, permitiendo que múltiples empresas
+  compartan la misma base de datos.
+
+Competencias aplicadas:
+  Aplicar el modelo de relaciones: se implementó correctamente la normalización
+  de tablas hasta tercera forma normal, eliminando redundancias y garantizando
+  la integridad referencial.
+
+Fecha de inicio : 28/04/2026
+Fecha de fin    : 30/04/2026
+
+Evidencia de cumplimiento:
+  Scripts SQL de creación de tablas con restricciones, llaves primarias,
+  foráneas e índices.
+
+Observaciones / Dificultades:
+  No se presentaron inasistencias durante este período.
+
+--------------------------------------------------------------------------------
+
+ACTIVIDAD 4
+-----------
+Descripción:
+  Se establecieron las relaciones entre entidades: un empleado pertenece a una
+  empresa y puede tener asignado un turno y un proceso.
+
+Competencias aplicadas:
+  Documentar procesos de desarrollo de software: se elaboró la documentación
+  técnica del esquema de base de datos describiendo cada tabla, sus campos,
+  tipos de datos y relaciones.
+
+Fecha de inicio : 28/04/2026
+Fecha de fin    : 30/04/2026
+
+Evidencia de cumplimiento:
+  Archivo seed.js con los datos iniciales del sistema (empresas, usuarios,
+  administradores, configuración base).
+
+Observaciones / Dificultades:
+  Se presentó una dificultad al implementar la importación masiva de
+  marcaciones desde archivos Excel, ya que la librería xlsx generaba
+  objetos date en lugar de cadenas de texto.
+
+--------------------------------------------------------------------------------
+
+ACTIVIDAD 5
+-----------
+Descripción:
+  Se creó la base de datos en PostgreSQL con el nombre Toru, se ejecutaron
+  los scripts de migración para generar todas las tablas con sus restricciones,
+  índices y valores por defecto.
+
+Competencias aplicadas:
+  Trabajo en equipo y resolución de problemas: se identificaron y solucionaron
+  conflictos en el diseño inicial del modelo de datos, ajustando la arquitectura
+  para soportar el esquema multi-tenant requerido por el cliente.
+
+Fecha de inicio : 28/04/2026
+Fecha de fin    : 30/04/2026
+
+Evidencia de cumplimiento:
+  Base de datos funcional en PostgreSQL con el esquema multi-tenant
+  implementado y verificado.
+
+Observaciones / Dificultades:
+  Se realizaron ajustes en el diseño del frontend para garantizar la
+  visualización correcta en dispositivos móviles, implementando un sidebar
+  adaptable (responsive).
+
+================================================================================
+INFORMACIÓN AFILIACIÓN A LA ARL
+================================================================================
+Decreto 055 de 2015 — afiliación de estudiantes al Sistema General de Riesgos
+Laborales.
+
+¿El aprendiz está afiliado a la ARL?                          : SI
+Nivel de riesgo actual                                        : Nivel 1
+¿El nivel de riesgo corresponde a las actividades realizadas? :
+¿El aprendiz cuenta con EPP requeridos?                       : NA
+
+================================================================================
+FIRMAS
+================================================================================
+Firma del aprendiz              : ________________________________
+Fecha de entrega de la bitácora : 30/04/2026
+
+Firma del instructor            : ________________________________
+Firma del ente co-formador      : ________________________________
+
+================================================================================
+NOTA LEGAL
+================================================================================
+Con el diligenciamiento de este formato autorizo al SENA para la recolección y
+tratamiento de mis datos personales, conforme a la política de datos personales
+de la entidad GOR-POL-006. Entiendo que los datos serán objeto de recolección,
+almacenamiento, uso, circulación, supresión, transferencia, transmisión, cesión
+y todo el tratamiento, realizados por el SENA.
+
+================================================================================
+ANEXO
+================================================================================
+Es opcional relacionar evidencia fotográfica de las actividades desarrolladas.
+(No aplica documentos de la empresa u otros aspectos sensibles.)
+
+================================================================================

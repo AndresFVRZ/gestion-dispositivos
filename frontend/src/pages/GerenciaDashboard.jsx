@@ -57,7 +57,7 @@ function GerenciaDashboard() {
           <p className="ger-hero-sub">Bienvenido, <strong>{usuario?.nombre}</strong> &mdash; {fecha}</p>
         </div>
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-          <button className="ger-btn-outline" onClick={() => navigate('/historial')}>Historial</button>
+          <button className="ger-btn-outline" onClick={() => navigate('/auditoria')}>Auditoría</button>
           <button className="ger-btn-white" onClick={() => navigate('/equipos')}>Inventario</button>
         </div>
       </div>

@@ -9,7 +9,7 @@ const ICONS = {
   Equipos:         'M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z',
   Usuarios:        'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z',
   Empresas:        'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4',
-  Historial:       'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2',
+  Auditoria:       'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2',
   Sedes:           'M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0zM15 11a3 3 0 11-6 0 3 3 0 016 0z',
   Mantenimientos:  'M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z',
 };
@@ -61,29 +61,29 @@ const Sidebar = () => {
       { path: '/mantenimientos', nombre: 'Mantenimientos'  },
       { path: '/usuarios',       nombre: 'Usuarios'        },
       { path: '/empresas',       nombre: 'Empresas'        },
-      { path: '/historial',      nombre: 'Historial'       },
+      { path: '/auditoria',      nombre: 'Auditoria'       },
     ],
     administrador: [
       { path: '/dashboard', nombre: 'Inicio'    },
       { path: '/equipos',   nombre: 'Equipos'   },
       { path: '/usuarios',  nombre: 'Usuarios'  },
-      { path: '/historial', nombre: 'Historial' },
+      { path: '/auditoria', nombre: 'Auditoria' },
     ],
     logistica: [
       { path: '/dashboard', nombre: 'Inicio'    },
       { path: '/equipos',   nombre: 'Equipos'   },
-      { path: '/historial', nombre: 'Historial' },
+      { path: '/auditoria', nombre: 'Auditoria' },
     ],
     soporte: [
       { path: '/dashboard',      nombre: 'Inicio'         },
       { path: '/equipos',        nombre: 'Equipos'        },
       { path: '/mantenimientos', nombre: 'Mantenimientos' },
-      { path: '/historial',      nombre: 'Historial'      },
+      { path: '/auditoria',      nombre: 'Auditoria'      },
     ],
     gerencia: [
       { path: '/dashboard', nombre: 'Inicio'    },
       { path: '/equipos',   nombre: 'Equipos'   },
-      { path: '/historial', nombre: 'Historial' },
+      { path: '/auditoria', nombre: 'Auditoria' },
     ],
     financiera: [
       { path: '/dashboard', nombre: 'Inicio'   },
@@ -133,11 +133,35 @@ const Sidebar = () => {
       <aside className={`sidebar ${collapsed ? 'sb-closed' : ''} ${mobileOpen ? 'sb-mobile-open' : ''}`}>
 
         {/* Encabezado */}
-        <div className="sb-brand">
-          <div className="sb-logo">GE</div>
+        <div
+          className="sb-brand"
+          style={{
+            flexDirection: 'column',
+            gap: collapsed ? 0 : 6,
+            minHeight: collapsed ? 72 : 'auto',
+          }}
+        >
+          <div
+            className="sb-logo"
+            style={{
+              width: collapsed ? 40 : '100%',
+              height: collapsed ? 40 : 84,
+              flexShrink: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'width 0.25s ease, height 0.25s ease',
+            }}
+          >
+            <img
+              src="/favicon.png"
+              alt="Logo"
+              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+            />
+          </div>
           {!collapsed && (
-            <div className="sb-logo-text">
-              <h2>Gestión de Equipos</h2>
+            <div className="sb-logo-text" style={{ flex: 'none', textAlign: 'center', width: '100%' }}>
+              <h2 style={{ whiteSpace: 'normal' }}>Gestión de Equipos</h2>
               <p>Sistema Corporativo</p>
             </div>
           )}
@@ -221,21 +245,21 @@ css.textContent = `
 
   /* ── Desktop colapso ── */
   .sidebar.sb-closed { width: 72px; }
+  .sidebar.sb-closed .sb-logo { width: 40px; height: 40px; }
 
   /* ── Encabezado ── */
   .sb-brand {
-    padding: 20px 16px;
+    padding: 16px;
     border-bottom: 1px solid rgba(255,255,255,0.08);
     display: flex; align-items: center; gap: 10px;
-    min-height: 72px;
+    min-height: 96px;
   }
   .sb-logo {
-    width: 40px; height: 40px; flex-shrink: 0;
-    background: linear-gradient(135deg, #4299e1, #3182ce);
-    border-radius: 10px;
+    width: 112px; height: 72px; flex-shrink: 0;
     display: flex; align-items: center; justify-content: center;
-    font-weight: 700; font-size: 16px; color: white;
+    transition: width 0.25s ease, height 0.25s ease;
   }
+  .sb-logo img { width: 100%; height: 100%; object-fit: contain; }
   .sb-logo-text { flex: 1; overflow: hidden; }
   .sb-logo-text h2 { font-size: 14px; font-weight: 600; color: white; margin: 0; white-space: nowrap; }
   .sb-logo-text p  { font-size: 10px; color: rgba(255,255,255,0.55); margin: 3px 0 0; white-space: nowrap; }

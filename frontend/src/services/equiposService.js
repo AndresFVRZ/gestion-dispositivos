@@ -27,6 +27,6 @@ export const reasignarPerifericos = async (equipoId, destinoEquipoId, periferico
   });
 };
 
-export const getHistorial = async (params = {}) => {
-  return await api.get('/historial', { params });
+export const getAuditoria = async (params = {}) => {
+  return await api.get('/auditoria', { params });
 };

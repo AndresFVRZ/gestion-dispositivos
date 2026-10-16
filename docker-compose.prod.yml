@@ -1,0 +1,74 @@
+# Stack de PRODUCCIÓN: db (MariaDB) + backend (node) + frontend (build de Vite servido por nginx).
+#
+# Uso:
+#   1. Copiar .env.prod.example -> .env.prod y rellenar (contraseñas reales).
+#   2. docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
+#
+# La app queda en  http://localhost:${WEB_PORT}  (por defecto 8090).
+# nginx sirve el frontend y reenvía /api y /public al backend por la red interna.
+
+services:
+  db:
+    image: mariadb:10.4
+    container_name: gestion_prod_db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?falta DB_ROOT_PASSWORD en .env.prod}
+      MYSQL_DATABASE: ${DB_NAME:-lucoa}
+    volumes:
+      - db_data_prod:/var/lib/mysql
+      - ./backend/db/schema_mariadb.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+      - ./backend/db/data_mariadb.sql:/docker-entrypoint-initdb.d/02_data.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 40s
+    # No se publica al host: solo accesible desde la red de compose.
+    # ports:
+    #   - "3308:3306"   # descomenta solo para inspeccionar la BD desde el host
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    container_name: gestion_prod_backend
+    restart: unless-stopped
+    env_file:
+      - .env.prod                 # SECRET_KEY, SMTP_*, APP_URL, APP_URL_BACKEND, PORT
+    environment:
+      NODE_ENV: production
+      DB_HOST: db
+      DB_PORT: "3306"
+      DB_USER: root
+      DB_PASSWORD: ${DB_ROOT_PASSWORD}
+      DB_NAME: ${DB_NAME:-lucoa}
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:5080/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    depends_on:
+      db:
+        condition: service_healthy
+    # ports:
+    #   - "5080:5080"   # descomenta solo para depurar el backend directo
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+      args:
+        VITE_API_URL: /api        # el bundle llama a /api (relativo) -> nginx -> backend
+    container_name: gestion_prod_frontend
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-8090}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  db_data_prod:

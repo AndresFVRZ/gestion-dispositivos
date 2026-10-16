@@ -37,10 +37,10 @@ router.post('/login', async (req, res) => {
     
     try {
         const result = await db.query(`
-            SELECT u.*, r.nombre as rol_nombre 
+            SELECT u.*, r.nombre as rol_nombre
             FROM usuarios u
             LEFT JOIN roles r ON u.rol_id = r.id
-            WHERE u.email = $1
+            WHERE u.email = ?
         `, [email]);
         
         if (result.rows.length === 0) {
@@ -60,7 +60,7 @@ router.post('/login', async (req, res) => {
                 `SELECT e.id, e.nombre
                  FROM usuario_empresas ue
                  JOIN empresas e ON ue.empresa_id = e.id
-                 WHERE ue.usuario_id = $1`,
+                 WHERE ue.usuario_id = ?`,
                 [user.id]
             );
             empresasAsignadas = empresasResult.rows;
@@ -103,7 +103,7 @@ router.post('/activar', async (req, res) => {
   try {
     const result = await db.query(
       `SELECT id, nombre, email FROM usuarios
-       WHERE invitation_token = $1 AND invitation_expires_at > NOW() AND estado = 'pendiente'`,
+       WHERE invitation_token = ? AND invitation_expires_at > NOW() AND estado = 'pendiente'`,
       [token]
     );
 
@@ -115,8 +115,8 @@ router.post('/activar', async (req, res) => {
 
     await db.query(
       `UPDATE usuarios
-       SET password_hash=$1, estado='activo', invitation_token=NULL, invitation_expires_at=NULL
-       WHERE id=$2`,
+       SET password_hash=?, estado='activo', invitation_token=NULL, invitation_expires_at=NULL
+       WHERE id=?`,
       [hashedPassword, result.rows[0].id]
     );
 
@@ -131,7 +131,7 @@ router.get('/activar/:token', async (req, res) => {
   try {
     const result = await db.query(
       `SELECT nombre, email FROM usuarios
-       WHERE invitation_token = $1 AND invitation_expires_at > NOW() AND estado = 'pendiente'`,
+       WHERE invitation_token = ? AND invitation_expires_at > NOW() AND estado = 'pendiente'`,
       [req.params.token]
     );
 
@@ -151,21 +151,21 @@ router.put('/password/:id', async (req, res) => {
     const { currentPassword, newPassword } = req.body;
     
     try {
-        const result = await db.query('SELECT * FROM usuarios WHERE id = $1', [id]);
-        
+        const result = await db.query('SELECT * FROM usuarios WHERE id = ?', [id]);
+
         if (result.rows.length === 0) {
             return res.status(404).json({ success: false, message: 'Usuario no encontrado' });
         }
-        
+
         const user = result.rows[0];
         const validPassword = await bcrypt.compare(currentPassword, user.password_hash);
-        
+
         if (!validPassword) {
             return res.status(401).json({ success: false, message: 'Contraseña actual incorrecta' });
         }
-        
+
         const hashedPassword = await bcrypt.hash(newPassword, 10);
-        await db.query('UPDATE usuarios SET password_hash = $1 WHERE id = $2', [hashedPassword, id]);
+        await db.query('UPDATE usuarios SET password_hash = ? WHERE id = ?', [hashedPassword, id]);
         
         res.json({ success: true, message: 'Contraseña actualizada exitosamente' });
     } catch (error) {
@@ -184,7 +184,7 @@ router.post('/forgot-password', async (req, res) => {
 
   try {
     const result = await db.query(
-      'SELECT id, nombre, email FROM usuarios WHERE email = $1 AND estado = $2',
+      'SELECT id, nombre, email FROM usuarios WHERE email = ? AND estado = ?',
       [email, 'activo']
     );
 
@@ -253,7 +253,7 @@ router.post('/reset-password', async (req, res) => {
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
     await db.query(
-      'UPDATE usuarios SET password_hash = $1 WHERE id = $2',
+      'UPDATE usuarios SET password_hash = ? WHERE id = ?',
       [hashedPassword, tokenData.userId]
     );
 

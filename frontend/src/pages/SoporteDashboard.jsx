@@ -55,7 +55,7 @@ function SoporteDashboard() {
           <p className="sd-hero-sub">Bienvenido, <strong>{usuario?.nombre}</strong> &mdash; {fecha}</p>
         </div>
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-          <button className="sd-btn-outline" onClick={() => navigate('/historial')}>Historial</button>
+          <button className="sd-btn-outline" onClick={() => navigate('/auditoria')}>Auditoría</button>
           <button className="sd-btn-white" onClick={() => navigate('/mantenimientos')}>Mantenimientos</button>
         </div>
       </div>

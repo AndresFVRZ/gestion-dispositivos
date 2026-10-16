@@ -18,21 +18,21 @@ const calcularFechaFinGarantia = (fechaAsignacion, garantiaTexto) => {
 };
 
 // ==========================================
-// FUNCIÓN PARA REGISTRAR HISTORIAL DE ACCIONES
+// FUNCIÓN PARA REGISTRAR AUDITORÍA DE ACCIONES
 // ==========================================
-const registrarHistorial = async (pool, req, accion, equipo, detalles = '') => {
+const registrarAuditoria = async (pool, req, accion, equipo, detalles = '') => {
     try {
         const usuario = req.usuario;
         if (!usuario) {
-            console.log('⚠️ No hay usuario en la petición, no se registra historial');
+            console.log('⚠️ No hay usuario en la petición, no se registra auditoría');
             return;
         }
         
         await pool.query(
-            `INSERT INTO historial_acciones 
-             (usuario_id, usuario_nombre, usuario_email, usuario_rol, accion, 
-              equipo_id, equipo_codigo, equipo_nombre, detalles, ip_address, empresa_id) 
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+            `INSERT INTO historial_acciones
+             (usuario_id, usuario_nombre, usuario_email, usuario_rol, accion,
+              equipo_id, equipo_codigo, equipo_nombre, detalles, ip_address, empresa_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
                 usuario.id,
                 usuario.nombre || 'Desconocido',
@@ -47,9 +47,9 @@ const registrarHistorial = async (pool, req, accion, equipo, detalles = '') => {
                 equipo?.empresa_id || usuario.empresa_id || null
             ]
         );
-        console.log(`📝 Historial: ${accion} - ${equipo?.codigo || 'N/A'} por ${usuario.nombre}`);
+        console.log(`📝 Auditoría: ${accion} - ${equipo?.codigo || 'N/A'} por ${usuario.nombre}`);
     } catch (error) {
-        console.error('❌ Error al registrar historial:', error.message);
+        console.error('❌ Error al registrar auditoría:', error.message);
     }
 };
 
@@ -80,6 +80,6 @@ const formatearFecha = (fecha, formato = 'DD/MM/YYYY') => {
 // ==========================================
 module.exports = {
     calcularFechaFinGarantia,
-    registrarHistorial,
+    registrarAuditoria,
     formatearFecha
 };

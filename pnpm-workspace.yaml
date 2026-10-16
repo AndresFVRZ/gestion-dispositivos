@@ -1,0 +1,8 @@
+packages:
+  - backend
+  - frontend
+
+# core-js solo trae un postinstall que imprime un banner de donacion.
+# No hay nada que compilar: se bloquea su build a proposito (false).
+allowBuilds:
+  core-js: false

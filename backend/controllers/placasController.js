@@ -31,7 +31,7 @@ const getPlacas = async (req, res) => {
                 LEFT JOIN empresas  e  ON p.empresa_id    = e.id
                 LEFT JOIN equipos   eq ON p.equipo_id     = eq.id
                 LEFT JOIN usuarios  u  ON p.asignado_por  = u.id
-                WHERE p.empresa_id = ANY($1::int[])
+                WHERE p.empresa_id IN (?)
                 ORDER BY p.created_at DESC
             `;
             params = [empresaIds];
@@ -53,15 +53,15 @@ const crearPlaca = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Número de placa y empresa son requeridos' });
 
         const numCheck = await pool.query(
-            'SELECT id FROM placas WHERE numero = $1 AND empresa_id = $2',
+            'SELECT id FROM placas WHERE numero = ? AND empresa_id = ?',
             [numero.trim(), empresa_id]
         );
         if (numCheck.rows.length > 0)
             return res.status(400).json({ success: false, message: 'Ya existe una placa con ese número en esta empresa' });
 
-        const result = await pool.query(
+        const ins = await pool.query(
             `INSERT INTO placas (equipo_id, empresa_id, numero, fecha_asignacion, estado, notas, asignado_por, created_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, NOW()) RETURNING *`,
+             VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`,
             [
                 equipo_id || null,
                 empresa_id,
@@ -72,7 +72,8 @@ const crearPlaca = async (req, res) => {
                 req.usuario.id
             ]
         );
-        res.status(201).json({ success: true, data: result.rows[0] });
+        const sel = await pool.query('SELECT * FROM placas WHERE id = ?', [ins.insertId]);
+        res.status(201).json({ success: true, data: sel.rows[0] });
     } catch (error) {
         console.error('Error crearPlaca:', error.message);
         res.status(500).json({ success: false, message: error.message });
@@ -88,17 +89,17 @@ const actualizarPlaca = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Número de placa y empresa son requeridos' });
 
         const numCheck = await pool.query(
-            'SELECT id FROM placas WHERE numero = $1 AND empresa_id = $2 AND id != $3',
+            'SELECT id FROM placas WHERE numero = ? AND empresa_id = ? AND id != ?',
             [numero.trim(), empresa_id, id]
         );
         if (numCheck.rows.length > 0)
             return res.status(400).json({ success: false, message: 'Ya existe una placa con ese número en esta empresa' });
 
-        const result = await pool.query(
+        const upd = await pool.query(
             `UPDATE placas
-             SET equipo_id = $1, empresa_id = $2, numero = $3,
-                 fecha_asignacion = $4, estado = $5, notas = $6
-             WHERE id = $7 RETURNING *`,
+             SET equipo_id = ?, empresa_id = ?, numero = ?,
+                 fecha_asignacion = ?, estado = ?, notas = ?
+             WHERE id = ?`,
             [
                 equipo_id || null,
                 empresa_id,
@@ -109,10 +110,11 @@ const actualizarPlaca = async (req, res) => {
                 id
             ]
         );
-        if (result.rows.length === 0)
+        if (upd.rowCount === 0)
             return res.status(404).json({ success: false, message: 'Placa no encontrada' });
 
-        res.json({ success: true, data: result.rows[0] });
+        const sel = await pool.query('SELECT * FROM placas WHERE id = ?', [id]);
+        res.json({ success: true, data: sel.rows[0] });
     } catch (error) {
         console.error('Error actualizarPlaca:', error.message);
         res.status(500).json({ success: false, message: error.message });
@@ -122,8 +124,8 @@ const actualizarPlaca = async (req, res) => {
 const eliminarPlaca = async (req, res) => {
     try {
         const { id } = req.params;
-        const result = await pool.query('DELETE FROM placas WHERE id = $1 RETURNING id', [id]);
-        if (result.rows.length === 0)
+        const result = await pool.query('DELETE FROM placas WHERE id = ?', [id]);
+        if (result.rowCount === 0)
             return res.status(404).json({ success: false, message: 'Placa no encontrada' });
 
         res.json({ success: true, message: 'Placa eliminada correctamente' });

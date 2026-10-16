@@ -10,7 +10,7 @@ import LogisticaDashboard from './pages/LogisticaDashboard';
 import SoporteDashboard from './pages/SoporteDashboard';
 import GerenciaDashboard from './pages/GerenciaDashboard';
 import FinancieraDashboard from './pages/FinancieraDashboard';
-import Historial from './pages/Historial';
+import Auditoria from './pages/Auditoria';
 import Usuarios from './pages/Usuarios';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
@@ -51,7 +51,16 @@ function AppContent() {
     return (
       <div className="splash-screen">
         <div className="splash-card">
-          <div className="splash-logo">GE</div>
+          <div
+            className="splash-logo"
+            style={{
+              width: 720, height: 440, maxWidth: '92vw',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              marginBottom: 8,
+            }}
+          >
+            <img src="/favicon.png" alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+          </div>
           <h1 className="splash-title">Gestión de Equipos</h1>
           <p className="splash-sub">Sistema Corporativo</p>
           <div className="splash-bar-track">
@@ -86,7 +95,7 @@ function AppContent() {
           <Route path="/equipos" element={<Equipos />} />
           <Route path="/usuarios" element={<Usuarios />} />
           <Route path="/empresas" element={<Empresas />} />
-          <Route path="/historial" element={<Historial />} />
+          <Route path="/auditoria" element={<Auditoria />} />
           <Route path="/mantenimientos" element={<Mantenimientos />} />
         </Routes>
       </Layout>
@@ -102,7 +111,7 @@ function AppContent() {
           <Route path="/dashboard" element={<AdministradorDashboard />} />
           <Route path="/equipos" element={<Equipos />} />
           <Route path="/usuarios" element={<Usuarios />} />
-          <Route path="/historial" element={<Historial />} />
+          <Route path="/auditoria" element={<Auditoria />} />
         </Routes>
       </Layout>
     );
@@ -116,7 +125,7 @@ function AppContent() {
           <Route path="/" element={<Navigate to="/dashboard" />} />
           <Route path="/dashboard" element={<LogisticaDashboard />} />
           <Route path="/equipos" element={<Equipos />} />
-          <Route path="/historial" element={<Historial />} />
+          <Route path="/auditoria" element={<Auditoria />} />
         </Routes>
       </Layout>
     );
@@ -131,7 +140,7 @@ function AppContent() {
           <Route path="/dashboard" element={<SoporteDashboard />} />
           <Route path="/equipos" element={<Equipos />} />
           <Route path="/mantenimientos" element={<Mantenimientos />} />
-          <Route path="/historial" element={<Historial />} />
+          <Route path="/auditoria" element={<Auditoria />} />
         </Routes>
       </Layout>
     );
@@ -145,7 +154,7 @@ function AppContent() {
           <Route path="/" element={<Navigate to="/dashboard" />} />
           <Route path="/dashboard" element={<GerenciaDashboard />} />
           <Route path="/equipos" element={<Equipos />} />
-          <Route path="/historial" element={<Historial />} />
+          <Route path="/auditoria" element={<Auditoria />} />
         </Routes>
       </Layout>
     );
@@ -206,14 +215,12 @@ appStyles.textContent = `
   }
 
   .splash-logo {
-    width: 72px; height: 72px;
-    background: linear-gradient(135deg, #4299e1, #2563eb);
-    border-radius: 20px;
+    width: 560px; height: 280px;
+    max-width: 90vw;
     display: flex; align-items: center; justify-content: center;
-    font-size: 28px; font-weight: 800; color: white;
-    box-shadow: 0 8px 32px rgba(37,99,235,0.5);
     margin-bottom: 8px;
   }
+  .splash-logo img { width: 100%; height: 100%; object-fit: contain; }
 
   .splash-title {
     font-size: 24px; font-weight: 700; color: white; margin: 0;
