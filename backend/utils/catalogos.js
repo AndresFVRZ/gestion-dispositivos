@@ -107,7 +107,22 @@ const familiaProcesador = (valor) => {
     return 'Otro';
 };
 
+// ==========================================
+// SEDES
+// Variantes escritas a mano → nombre del catálogo (mismas reglas que la migración 005)
+// ==========================================
+const normalizarNombreSede = (valor) => {
+    if (valor === null || valor === undefined) return null;
+    const u = String(valor).trim().toUpperCase();
+    if (!u) return null;
+    if (u.startsWith('CAC')) return 'CACIQUE';
+    if (['CRA15', 'CR15'].includes(u.replace(/\s+/g, ''))) return 'CRA 15';
+    if (['SL', 'SANTA LUCIA', 'SANTA LUCÍA'].includes(u)) return 'SANTA LUCIA';
+    return u;
+};
+
 module.exports = {
+    normalizarNombreSede,
     GARANTIAS,
     DIAS_GARANTIA_VALIDOS,
     ESTADOS_GARANTIA,

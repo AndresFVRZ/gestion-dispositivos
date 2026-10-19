@@ -38,6 +38,7 @@ const placasRoutes = require('./routes/placas');
 const tipoDispositivoRoutes = require('./routes/tipoDispositivo');
 const mantenimientosRoutes = require('./routes/mantenimientos');
 const procesosRoutes = require('./routes/procesos');
+const stockRoutes = require('./routes/stock');
 
 app.get('/', (req, res) => {
     res.json({ message: 'API funcionando', version: '1.0.0' });
@@ -54,6 +55,7 @@ app.use('/api/placas', placasRoutes);
 app.use('/api/tipo-dispositivo', tipoDispositivoRoutes);
 app.use('/api/mantenimientos', mantenimientosRoutes);
 app.use('/api/procesos', procesosRoutes);
+app.use('/api/stock', stockRoutes);
 
 app.listen(PORT, () => {
     console.log(`\n🚀 Servidor corriendo en http://localhost:${PORT}`);

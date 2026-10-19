@@ -15,12 +15,30 @@ const {
     FAMILIAS_PROCESADOR,
     normalizarProcesador,
     familiaProcesador,
+    normalizarNombreSede,
 } = require('../utils/catalogos');
+const { registrarMovimiento } = require('../utils/hojaVida');
 
-// Columnas calculadas de garantía que acompañan a cada equipo
+// Sede del equipo: por sede_id (validando que sea de la empresa) o, si solo llega
+// el texto (importación / formulario antiguo), buscándola por nombre en la empresa.
+// Devuelve { sede_id, sede } o { error }.
+const resolverSede = async (empresaId, sedeId, sedeTexto) => {
+    if (sedeId) {
+        const r = await pool.query('SELECT id, nombre FROM sedes WHERE id = ? AND empresa_id = ?', [sedeId, empresaId]);
+        if (r.rows.length === 0) return { error: 'La sede seleccionada no pertenece a la empresa del equipo' };
+        return { sede_id: r.rows[0].id, sede: r.rows[0].nombre };
+    }
+    const textoSede = sedeTexto?.trim() || null;
+    if (!textoSede || !empresaId) return { sede_id: null, sede: textoSede };
+    const r = await pool.query('SELECT id FROM sedes WHERE empresa_id = ? AND nombre = ?', [empresaId, normalizarNombreSede(textoSede)]);
+    return { sede_id: r.rows[0]?.id || null, sede: textoSede };
+};
+
+// Columnas calculadas de garantía y sede que acompañan a cada equipo (requiere LEFT JOIN sedes sd)
 const GARANTIA_COLUMNAS = `
     DATE_FORMAT(${GARANTIA_FIN_SQL}, '%Y-%m-%d') AS garantia_fecha_fin,
-    ${GARANTIA_ESTADO_SQL} AS garantia_estado`;
+    ${GARANTIA_ESTADO_SQL} AS garantia_estado,
+    sd.nombre AS sede_nombre`;
 
 // "1,2,3" o ["1","2"] → ['1','2','3']
 const parseLista = (valor) => {
@@ -176,6 +194,7 @@ const getEquipos = async (req, res) => {
             LEFT JOIN tipo_dispositivo td ON eq.tipo_id = td.id
             LEFT JOIN empresas ep ON eq.prestado_a_empresa_id = ep.id
             LEFT JOIN procesos pr ON eq.proceso_id = pr.id
+            LEFT JOIN sedes sd ON eq.sede_id = sd.id
             WHERE eq.eliminado = FALSE
         `;
 
@@ -252,6 +271,7 @@ const getEquiposByEmpresa = async (req, res) => {
             JOIN empresas e ON eq.empresa_id = e.id
             LEFT JOIN tipo_dispositivo td ON eq.tipo_id = td.id
             LEFT JOIN procesos pr ON eq.proceso_id = pr.id
+            LEFT JOIN sedes sd ON eq.sede_id = sd.id
             WHERE eq.empresa_id = ? AND eq.eliminado = FALSE
             ORDER BY td.nombre, eq.nombre_equipo
         `;
@@ -316,6 +336,9 @@ const crearEquipo = async (req, res) => {
         const procesoIdCrear   = req.usuario?.rol === 'super_admin' ? (proceso_id || null) : null;
         const asignadoACrear   = req.usuario?.rol === 'super_admin' ? (asignado_a  || '')   : '';
 
+        const sedeRes = await resolverSede(empresa_id, req.body.sede_id, sede);
+        if (sedeRes.error) return res.status(400).json({ success: false, message: sedeRes.error });
+
         const fechaGar  = fecha_garantia || null;
         const garantiaVal = campos.garantia;
         const client = await pool.connect();
@@ -326,18 +349,19 @@ const crearEquipo = async (req, res) => {
                     (codigo, nombre_equipo, tipo_id, marca, modelo, serial, estado,
                      ubicacion, piso, modulo, asignado_a, fecha_garantia, procesador, ram, disco_duro,
                      sistema_operativo, garantia, especificaciones, observaciones,
-                     empresa_id, numero_placa, sede, prestado_a_empresa_id, proceso_id, created_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+                     empresa_id, numero_placa, sede, sede_id, prestado_a_empresa_id, proceso_id, created_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
                 [
                     req.body.codigo || null, nombre_equipo, tipo_id || null, marca, modelo, serial, estado,
                     ubicacion, piso || null, modulo || null, asignadoACrear, fechaGar, campos.procesador, campos.ram, disco_duro,
                     sistema_operativo, garantiaVal, especificaciones, observaciones || null,
-                    empresa_id, numero_placa || null, sede || null, prestado_a_empresa_id || null, procesoIdCrear
+                    empresa_id, numero_placa || null, sedeRes.sede, sedeRes.sede_id, prestado_a_empresa_id || null, procesoIdCrear
                 ]
             );
             const sel = await client.query(`SELECT * FROM equipos WHERE id = ?`, [ins.insertId]);
             const equipo = sel.rows[0];
             await guardarPerifericos(client, equipo.id, perifericos);
+            await registrarMovimiento(client, req, {}, equipo, 'Asignación al registrar el equipo');
             await client.query('COMMIT');
             await registrarAuditoria(pool, req, 'CREAR', equipo, `Equipo creado: ${serial || nombre_equipo}`);
             res.status(201).json({ success: true, data: enriquecerEquipos([equipo])[0], advertencias: campos.advertencias });
@@ -394,22 +418,23 @@ const actualizarEquipo = async (req, res) => {
         if (!req.body.es_importacion && ESTADOS_CON_OBSERVACIONES.includes(estado) && !observaciones?.trim())
             return res.status(400).json({ success: false, message: `El campo Observaciones es obligatorio cuando el estado es "${estado}"` });
 
-        const actual = await pool.query('SELECT garantia FROM equipos WHERE id = ? AND eliminado = FALSE', [id]);
-        const campos = prepararCamposEquipo(req.body, { garantiaActual: actual.rows[0]?.garantia ?? null });
+        const actual = await pool.query('SELECT * FROM equipos WHERE id = ? AND eliminado = FALSE', [id]);
+        if (actual.rows.length === 0)
+            return res.status(404).json({ success: false, message: 'Equipo no encontrado' });
+        const antes = actual.rows[0];
+        const campos = prepararCamposEquipo(req.body, { garantiaActual: antes.garantia ?? null });
         if (campos.error) return res.status(400).json({ success: false, message: campos.error });
+
+        const sedeRes = await resolverSede(empresa_id, req.body.sede_id, sede);
+        if (sedeRes.error) return res.status(400).json({ success: false, message: sedeRes.error });
 
         // Solo super_admin y soporte pueden modificar proceso y persona asignada
         const ROLES_ASIGNAR = ['super_admin', 'soporte'];
         let procesoIdFinal = proceso_id || null;
         let asignadoAFinal = asignado_a || '';
         if (!ROLES_ASIGNAR.includes(req.usuario?.rol)) {
-            const curr = await pool.query(
-                'SELECT proceso_id, asignado_a FROM equipos WHERE id = ? AND eliminado = FALSE', [id]
-            );
-            if (curr.rows.length > 0) {
-                procesoIdFinal = curr.rows[0].proceso_id;
-                asignadoAFinal = curr.rows[0].asignado_a || '';
-            }
+            procesoIdFinal = antes.proceso_id;
+            asignadoAFinal = antes.asignado_a || '';
         }
 
         if (tipo_id) {
@@ -433,13 +458,13 @@ const actualizarEquipo = async (req, res) => {
                     asignado_a = ?, fecha_garantia = ?, procesador = ?, ram = ?,
                     disco_duro = ?, sistema_operativo = ?, garantia = ?,
                     especificaciones = ?, observaciones = ?, empresa_id = ?,
-                    numero_placa = ?, sede = ?, prestado_a_empresa_id = ?, proceso_id = ?
+                    numero_placa = ?, sede = ?, sede_id = ?, prestado_a_empresa_id = ?, proceso_id = ?
                  WHERE id = ? AND eliminado = FALSE`,
                 [
                     req.body.codigo || null, nombre_equipo, tipo_id || null, marca, modelo, serial, estado,
                     ubicacion, piso || null, modulo || null, asignadoAFinal, fechaGar, campos.procesador, campos.ram,
                     disco_duro, sistema_operativo, garantiaVal, especificaciones, observaciones || null,
-                    empresa_id, numero_placa || null, sede || null, prestado_a_empresa_id || null,
+                    empresa_id, numero_placa || null, sedeRes.sede, sedeRes.sede_id, prestado_a_empresa_id || null,
                     procesoIdFinal, id
                 ]
             );
@@ -450,6 +475,7 @@ const actualizarEquipo = async (req, res) => {
             }
             const equipo = sel.rows[0];
             await guardarPerifericos(client, id, perifericos);
+            await registrarMovimiento(client, req, antes, equipo, observaciones);
             await client.query('COMMIT');
             await registrarAuditoria(pool, req, 'EDITAR', equipo, `Equipo editado: ${serial || nombre_equipo}`);
             res.json({ success: true, data: enriquecerEquipos([equipo])[0], advertencias: campos.advertencias });
@@ -514,6 +540,57 @@ const getOpciones = async (req, res) => {
 };
 
 // ==========================================
+// HOJA DE VIDA: movimientos de asignación, sede y estado
+// GET /api/equipos/:id/hoja-vida
+// ==========================================
+const getHojaVida = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const eq = await pool.query(
+            `SELECT eq.id, eq.codigo, eq.nombre_equipo, eq.serial, eq.estado, eq.asignado_a,
+                    eq.empresa_id, eq.prestado_a_empresa_id, e.nombre AS empresa_nombre, sd.nombre AS sede_nombre
+             FROM equipos eq
+             JOIN empresas e ON e.id = eq.empresa_id
+             LEFT JOIN sedes sd ON sd.id = eq.sede_id
+             WHERE eq.id = ?`,
+            [id]
+        );
+        if (eq.rows.length === 0)
+            return res.status(404).json({ success: false, message: 'Equipo no encontrado' });
+
+        const equipo = eq.rows[0];
+        const usuario = req.usuario;
+        if (usuario.rol !== 'super_admin') {
+            const empresaIds = (usuario.empresas || []).map(e => Number(e.id));
+            if (!empresaIds.includes(equipo.empresa_id) && !empresaIds.includes(equipo.prestado_a_empresa_id))
+                return res.status(403).json({ success: false, message: 'No tienes acceso a este equipo' });
+        }
+
+        const movimientos = await pool.query(
+            `SELECT h.id, h.tipo_movimiento, h.fecha,
+                    h.asignado_anterior, h.asignado_nuevo,
+                    h.estado_anterior, h.estado_nuevo,
+                    sa.nombre AS sede_anterior, sn.nombre AS sede_nueva,
+                    h.realizado_por,
+                    COALESCE(h.realizado_por_nombre, u.nombre) AS realizado_por_nombre,
+                    h.observaciones
+             FROM historial_asignaciones h
+             LEFT JOIN sedes sa ON sa.id = h.sede_anterior_id
+             LEFT JOIN sedes sn ON sn.id = h.sede_nueva_id
+             LEFT JOIN usuarios u ON u.id = h.realizado_por
+             WHERE h.equipo_id = ?
+             ORDER BY h.fecha DESC, h.id DESC`,
+            [id]
+        );
+
+        res.json({ success: true, data: { equipo, movimientos: movimientos.rows } });
+    } catch (error) {
+        console.error('Error en getHojaVida:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// ==========================================
 // OBTENER EQUIPO POR ID (con periféricos)
 // ==========================================
 const getEquipoById = async (req, res) => {
@@ -528,6 +605,7 @@ const getEquipoById = async (req, res) => {
              JOIN empresas e ON eq.empresa_id = e.id
              LEFT JOIN tipo_dispositivo td ON eq.tipo_id = td.id
              LEFT JOIN procesos pr ON eq.proceso_id = pr.id
+            LEFT JOIN sedes sd ON eq.sede_id = sd.id
              WHERE eq.id = ? AND eq.eliminado = FALSE`,
             [id]
         );
@@ -583,6 +661,7 @@ const reasignarPerifericos = async (req, res) => {
 module.exports = {
     getEquipos,
     getOpciones,
+    getHojaVida,
     getEquiposByEmpresa,
     getEquipoById,
     crearEquipo,

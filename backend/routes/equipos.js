@@ -4,6 +4,7 @@ const { verificarToken } = require('../middleware/auth');
 const {
     getEquipos,
     getOpciones,
+    getHojaVida,
     getEquiposByEmpresa,
     getEquipoById,
     crearEquipo,
@@ -14,6 +15,7 @@ const {
 router.get('/opciones', verificarToken, getOpciones);
 router.get('/empresa/:empresaId', verificarToken, getEquiposByEmpresa);
 router.get('/', verificarToken, getEquipos);
+router.get('/:id/hoja-vida', verificarToken, getHojaVida);
 router.get('/:id', verificarToken, getEquipoById);
 router.post('/:id/reasignar-perifericos', verificarToken, reasignarPerifericos);
 router.post('/', verificarToken, crearEquipo);

@@ -1,5 +1,6 @@
 const pool = require('../config/db');
 const { registrarAuditoria } = require('../utils/helpers');
+const { registrarMovimiento } = require('../utils/hojaVida');
 
 const TIPOS_VALIDOS = ['Preventivo', 'Correctivo', 'Actualización', 'Limpieza', 'Diagnóstico', 'Otro'];
 
@@ -53,7 +54,7 @@ const crearMantenimiento = async (req, res) => {
             return res.status(400).json({ success: false, message: `Tipo inválido. Opciones: ${TIPOS_VALIDOS.join(', ')}` });
 
         const equipoActual = await pool.query(
-            `SELECT id, codigo, nombre_equipo, empresa_id, estado FROM equipos WHERE id = ? AND eliminado = FALSE`,
+            `SELECT id, codigo, nombre_equipo, empresa_id, estado, asignado_a, sede_id FROM equipos WHERE id = ? AND eliminado = FALSE`,
             [equipo_id]
         );
         if (equipoActual.rows.length === 0)
@@ -73,6 +74,8 @@ const crearMantenimiento = async (req, res) => {
             );
 
             await client.query(`UPDATE equipos SET estado = 'Mantenimiento' WHERE id = ?`, [equipo_id]);
+            await registrarMovimiento(client, req, equipo, { ...equipo, estado: 'Mantenimiento' },
+                `Mantenimiento ${tipo}${descripcion?.trim() ? ': ' + descripcion.trim() : ''}`);
 
             const sel = await client.query(`SELECT * FROM mantenimientos WHERE id = ?`, [ins.insertId]);
 
@@ -208,7 +211,8 @@ const aprobarMantenimiento = async (req, res) => {
         const usuarioId = req.usuario.id;
 
         const mantRes = await pool.query(
-            `SELECT m.*, eq.codigo, eq.nombre_equipo, eq.empresa_id
+            `SELECT m.*, eq.codigo, eq.nombre_equipo, eq.empresa_id,
+                    eq.estado AS estado_equipo, eq.asignado_a, eq.sede_id
              FROM mantenimientos m
              JOIN equipos eq ON m.equipo_id = eq.id
              WHERE m.id = ?`, [id]
@@ -238,6 +242,10 @@ const aprobarMantenimiento = async (req, res) => {
                 `UPDATE equipos SET estado = ? WHERE id = ?`,
                 [estadoRestaurar, mant.equipo_id]
             );
+            const equipoMov = { id: mant.equipo_id, empresa_id: mant.empresa_id, asignado_a: mant.asignado_a, sede_id: mant.sede_id };
+            await registrarMovimiento(client, req,
+                { ...equipoMov, estado: mant.estado_equipo }, { ...equipoMov, estado: estadoRestaurar },
+                `Mantenimiento aprobado${notas_aprobacion?.trim() ? ': ' + notas_aprobacion.trim() : ''}`);
 
             const sel = await client.query(`SELECT * FROM mantenimientos WHERE id = ?`, [id]);
 
