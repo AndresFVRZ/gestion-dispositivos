@@ -1,5 +1,72 @@
 const pool = require('../config/db');
 const { registrarAuditoria } = require('../utils/helpers');
+const {
+    GARANTIAS,
+    DIAS_GARANTIA_VALIDOS,
+    ESTADOS_GARANTIA,
+    GARANTIA_FIN_SQL,
+    GARANTIA_ESTADO_SQL,
+    ESTADOS,
+    ESTADOS_VALIDOS,
+    ESTADOS_CON_OBSERVACIONES,
+    RAM_ESTANDAR_GB,
+    ramGb,
+    normalizarRam,
+    FAMILIAS_PROCESADOR,
+    normalizarProcesador,
+    familiaProcesador,
+} = require('../utils/catalogos');
+
+// Columnas calculadas de garantía que acompañan a cada equipo
+const GARANTIA_COLUMNAS = `
+    DATE_FORMAT(${GARANTIA_FIN_SQL}, '%Y-%m-%d') AS garantia_fecha_fin,
+    ${GARANTIA_ESTADO_SQL} AS garantia_estado`;
+
+// "1,2,3" o ["1","2"] → ['1','2','3']
+const parseLista = (valor) => {
+    if (valor === undefined || valor === null || valor === '') return [];
+    const partes = Array.isArray(valor) ? valor : String(valor).split(',');
+    return partes.map(v => String(v).trim()).filter(Boolean);
+};
+
+// Campos derivados de RAM y procesador para filtros y tarjetas de la UI
+const enriquecerEquipos = (rows) => {
+    for (const r of rows) {
+        r.ram_gb = ramGb(r.ram);
+        r.procesador_familia = familiaProcesador(r.procesador);
+    }
+    return rows;
+};
+
+// Valida estado y garantía y normaliza RAM / procesador antes de guardar.
+// `garantiaActual` permite conservar garantías antiguas fuera de catálogo al editar.
+const prepararCamposEquipo = (body, { garantiaActual = null } = {}) => {
+    const advertencias = [];
+
+    if (body.estado && !ESTADOS_VALIDOS.includes(body.estado))
+        return { error: `Estado no válido: "${body.estado}". Valores permitidos: ${ESTADOS_VALIDOS.join(', ')}` };
+
+    let garantia = body.garantia === '' || body.garantia === undefined ? null : body.garantia;
+    if (garantia !== null) {
+        const dias = Number(garantia);
+        const esAntigua = garantiaActual !== null && dias === Number(garantiaActual);
+        if (!DIAS_GARANTIA_VALIDOS.includes(dias) && !esAntigua) {
+            if (!body.es_importacion)
+                return { error: `Garantía no válida. Opciones: ${GARANTIAS.map(g => `${g.label} (${g.dias} días)`).join(', ')}` };
+            advertencias.push(`Garantía "${garantia}" no reconocida: se guardó sin garantía`);
+            garantia = null;
+        } else {
+            garantia = dias;
+        }
+    }
+
+    return {
+        garantia,
+        ram: normalizarRam(body.ram),
+        procesador: normalizarProcesador(body.procesador),
+        advertencias,
+    };
+};
 
 // Adjunta el arreglo `perifericos` a uno o varios equipos con una sola consulta.
 // Reemplaza al json_agg/json_build_object de PostgreSQL (no está en MariaDB 10.4).
@@ -68,6 +135,10 @@ const guardarPerifericos = async (client, equipoId, perifericos) => {
     }
 };
 
+// GET /api/equipos
+// Filtros opcionales por query string (los de lista aceptan varios valores separados por coma):
+//   tipo_id, estado, empresa_id, sede_id, proceso_id, garantia (vigente|proxima|critica|vencida|sin_garantia),
+//   ram (GB: "8" o "8 GB"), procesador_familia ("Intel Core i5"), procesador (texto), q (búsqueda libre)
 const getEquipos = async (req, res) => {
     try {
         const usuario = req.usuario;
@@ -76,11 +147,30 @@ const getEquipos = async (req, res) => {
             return res.status(401).json({ success: false, message: 'No autorizado' });
         }
 
+        const f = req.query;
+        const tipos      = parseLista(f.tipo_id);
+        const estados    = parseLista(f.estado);
+        const empresas   = parseLista(f.empresa_id);
+        const sedes      = parseLista(f.sede_id);
+        const procesos   = parseLista(f.proceso_id);
+        const garantias  = parseLista(f.garantia);
+        const rams       = parseLista(f.ram).map(ramGb).filter(Boolean);
+        const familias   = parseLista(f.procesador_familia).map(v => v.toLowerCase());
+
+        const estadosInvalidos = estados.filter(e => !ESTADOS_VALIDOS.includes(e));
+        if (estadosInvalidos.length)
+            return res.status(400).json({ success: false, message: `Estado no válido: ${estadosInvalidos.join(', ')}` });
+        const codigosGarantia = ESTADOS_GARANTIA.map(g => g.codigo);
+        const garantiasInvalidas = garantias.filter(g => !codigosGarantia.includes(g));
+        if (garantiasInvalidas.length)
+            return res.status(400).json({ success: false, message: `Filtro de garantía no válido: ${garantiasInvalidas.join(', ')}. Opciones: ${codigosGarantia.join(', ')}` });
+
         let query = `
             SELECT eq.*, e.nombre as empresa_nombre,
                    td.nombre as tipo_nombre,
                    ep.nombre as prestado_a_nombre,
-                   pr.nombre as proceso_nombre
+                   pr.nombre as proceso_nombre,
+                   ${GARANTIA_COLUMNAS}
             FROM equipos eq
             JOIN empresas e ON eq.empresa_id = e.id
             LEFT JOIN tipo_dispositivo td ON eq.tipo_id = td.id
@@ -113,10 +203,37 @@ const getEquipos = async (req, res) => {
             }
         }
 
+        if (tipos.length)    { query += ` AND eq.tipo_id IN (?)`;    params.push(tipos); }
+        if (estados.length)  { query += ` AND eq.estado IN (?)`;     params.push(estados); }
+        if (sedes.length)    { query += ` AND eq.sede_id IN (?)`;    params.push(sedes); }
+        if (procesos.length) { query += ` AND eq.proceso_id IN (?)`; params.push(procesos); }
+        if (empresas.length) {
+            // Igual que la vista por empresa del frontend: propios + prestados a esa empresa
+            query += ` AND (eq.empresa_id IN (?) OR eq.prestado_a_empresa_id IN (?))`;
+            params.push(empresas, empresas);
+        }
+        if (garantias.length) { query += ` AND (${GARANTIA_ESTADO_SQL}) IN (?)`; params.push(garantias); }
+        if (f.procesador?.trim()) {
+            query += ` AND eq.procesador LIKE ?`;
+            params.push(`%${normalizarProcesador(f.procesador)}%`);
+        }
+        if (f.q?.trim()) {
+            const like = `%${f.q.trim()}%`;
+            query += ` AND (eq.codigo LIKE ? OR eq.nombre_equipo LIKE ? OR eq.serial LIKE ?
+                           OR eq.asignado_a LIKE ? OR eq.numero_placa LIKE ? OR eq.marca LIKE ? OR eq.modelo LIKE ?)`;
+            params.push(like, like, like, like, like, like, like);
+        }
+
         query += ` ORDER BY e.nombre, td.nombre, eq.codigo`;
         const result = await pool.query(query, params);
-        await attachPerifericos(result.rows);
-        res.json({ success: true, data: result.rows });
+        let equipos = enriquecerEquipos(result.rows);
+
+        // RAM y familia de procesador son texto libre en la BD: se filtran ya normalizados
+        if (rams.length)     equipos = equipos.filter(eq => rams.includes(eq.ram_gb));
+        if (familias.length) equipos = equipos.filter(eq => familias.includes((eq.procesador_familia || '').toLowerCase()));
+
+        await attachPerifericos(equipos);
+        res.json({ success: true, data: equipos, total: equipos.length });
     } catch (error) {
         console.error('Error:', error);
         res.status(500).json({ success: false, message: error.message });
@@ -129,7 +246,8 @@ const getEquiposByEmpresa = async (req, res) => {
         const query = `
             SELECT eq.*, e.nombre as empresa_nombre,
                    td.nombre as tipo_nombre,
-                   pr.nombre as proceso_nombre
+                   pr.nombre as proceso_nombre,
+                   ${GARANTIA_COLUMNAS}
             FROM equipos eq
             JOIN empresas e ON eq.empresa_id = e.id
             LEFT JOIN tipo_dispositivo td ON eq.tipo_id = td.id
@@ -138,6 +256,7 @@ const getEquiposByEmpresa = async (req, res) => {
             ORDER BY td.nombre, eq.nombre_equipo
         `;
         const result = await pool.query(query, [empresaId]);
+        enriquecerEquipos(result.rows);
         await attachPerifericos(result.rows);
         res.json({ success: true, data: result.rows });
     } catch (error) {
@@ -178,8 +297,11 @@ const crearEquipo = async (req, res) => {
             perifericos
         } = req.body;
 
-        if (!req.body.es_importacion && ['Dañado', 'Mantenimiento', 'Baja'].includes(estado) && !observaciones?.trim())
+        if (!req.body.es_importacion && ESTADOS_CON_OBSERVACIONES.includes(estado) && !observaciones?.trim())
             return res.status(400).json({ success: false, message: `El campo Observaciones es obligatorio cuando el estado es "${estado}"` });
+
+        const campos = prepararCamposEquipo(req.body);
+        if (campos.error) return res.status(400).json({ success: false, message: campos.error });
 
         if (tipo_id) {
             const tipoCheck = await pool.query(
@@ -195,7 +317,7 @@ const crearEquipo = async (req, res) => {
         const asignadoACrear   = req.usuario?.rol === 'super_admin' ? (asignado_a  || '')   : '';
 
         const fechaGar  = fecha_garantia || null;
-        const garantiaVal = garantia || null;
+        const garantiaVal = campos.garantia;
         const client = await pool.connect();
         try {
             await client.query('BEGIN');
@@ -208,7 +330,7 @@ const crearEquipo = async (req, res) => {
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
                 [
                     req.body.codigo || null, nombre_equipo, tipo_id || null, marca, modelo, serial, estado,
-                    ubicacion, piso || null, modulo || null, asignadoACrear, fechaGar, procesador, ram, disco_duro,
+                    ubicacion, piso || null, modulo || null, asignadoACrear, fechaGar, campos.procesador, campos.ram, disco_duro,
                     sistema_operativo, garantiaVal, especificaciones, observaciones || null,
                     empresa_id, numero_placa || null, sede || null, prestado_a_empresa_id || null, procesoIdCrear
                 ]
@@ -218,7 +340,7 @@ const crearEquipo = async (req, res) => {
             await guardarPerifericos(client, equipo.id, perifericos);
             await client.query('COMMIT');
             await registrarAuditoria(pool, req, 'CREAR', equipo, `Equipo creado: ${serial || nombre_equipo}`);
-            res.status(201).json({ success: true, data: equipo });
+            res.status(201).json({ success: true, data: enriquecerEquipos([equipo])[0], advertencias: campos.advertencias });
         } catch (err) {
             await client.query('ROLLBACK');
             throw err;
@@ -269,8 +391,12 @@ const actualizarEquipo = async (req, res) => {
         if (!ROLES_BAJA.includes(req.usuario?.rol) && ESTADOS_BAJA.includes(estado))
             return res.status(403).json({ success: false, message: 'Solo el perfil Gerencia puede poner equipos en Baja o Canibalizar' });
 
-        if (!req.body.es_importacion && ['Dañado', 'Mantenimiento', 'Baja', 'Canibalizar'].includes(estado) && !observaciones?.trim())
+        if (!req.body.es_importacion && ESTADOS_CON_OBSERVACIONES.includes(estado) && !observaciones?.trim())
             return res.status(400).json({ success: false, message: `El campo Observaciones es obligatorio cuando el estado es "${estado}"` });
+
+        const actual = await pool.query('SELECT garantia FROM equipos WHERE id = ? AND eliminado = FALSE', [id]);
+        const campos = prepararCamposEquipo(req.body, { garantiaActual: actual.rows[0]?.garantia ?? null });
+        if (campos.error) return res.status(400).json({ success: false, message: campos.error });
 
         // Solo super_admin y soporte pueden modificar proceso y persona asignada
         const ROLES_ASIGNAR = ['super_admin', 'soporte'];
@@ -296,7 +422,7 @@ const actualizarEquipo = async (req, res) => {
         }
 
         const fechaGar  = fecha_garantia || null;
-        const garantiaVal = garantia || null;
+        const garantiaVal = campos.garantia;
         const client = await pool.connect();
         try {
             await client.query('BEGIN');
@@ -311,7 +437,7 @@ const actualizarEquipo = async (req, res) => {
                  WHERE id = ? AND eliminado = FALSE`,
                 [
                     req.body.codigo || null, nombre_equipo, tipo_id || null, marca, modelo, serial, estado,
-                    ubicacion, piso || null, modulo || null, asignadoAFinal, fechaGar, procesador, ram,
+                    ubicacion, piso || null, modulo || null, asignadoAFinal, fechaGar, campos.procesador, campos.ram,
                     disco_duro, sistema_operativo, garantiaVal, especificaciones, observaciones || null,
                     empresa_id, numero_placa || null, sede || null, prestado_a_empresa_id || null,
                     procesoIdFinal, id
@@ -326,7 +452,7 @@ const actualizarEquipo = async (req, res) => {
             await guardarPerifericos(client, id, perifericos);
             await client.query('COMMIT');
             await registrarAuditoria(pool, req, 'EDITAR', equipo, `Equipo editado: ${serial || nombre_equipo}`);
-            res.json({ success: true, data: equipo });
+            res.json({ success: true, data: enriquecerEquipos([equipo])[0], advertencias: campos.advertencias });
         } catch (err) {
             await client.query('ROLLBACK');
             throw err;
@@ -340,6 +466,54 @@ const actualizarEquipo = async (req, res) => {
 };
 
 // ==========================================
+// OPCIONES PARA FORMULARIOS Y FILTROS
+// GET /api/equipos/opciones
+// ==========================================
+const getOpciones = async (req, res) => {
+    try {
+        const [tipos, rams, procesadores] = await Promise.all([
+            pool.query(`SELECT id, nombre, categoria, descripcion FROM tipo_dispositivo ORDER BY nombre`),
+            pool.query(`SELECT DISTINCT ram FROM equipos WHERE eliminado = FALSE AND ram IS NOT NULL AND ram <> ''`),
+            pool.query(`SELECT DISTINCT procesador FROM equipos WHERE eliminado = FALSE AND procesador IS NOT NULL AND procesador <> ''`),
+        ]);
+
+        // RAM: estándar + lo que exista en los equipos, ya normalizado y sin repetir
+        const gbSet = new Set(RAM_ESTANDAR_GB);
+        for (const r of rams.rows) {
+            const gb = ramGb(r.ram);
+            if (gb) gbSet.add(gb);
+        }
+        const ram = [...gbSet].sort((a, b) => a - b).map(gb => ({ gb, label: `${gb} GB` }));
+
+        // Procesador: familias conocidas + las detectadas, y valores existentes para autocompletar
+        const valoresProc = [...new Set(procesadores.rows.map(p => normalizarProcesador(p.procesador)))].sort();
+        const familias = new Set(FAMILIAS_PROCESADOR);
+        for (const p of valoresProc) familias.add(familiaProcesador(p));
+
+        res.json({
+            success: true,
+            data: {
+                garantias: GARANTIAS,
+                estados_garantia: ESTADOS_GARANTIA,
+                estados: ESTADOS,
+                tipos: {
+                    equipo:     tipos.rows.filter(t => t.categoria === 'equipo'),
+                    periferico: tipos.rows.filter(t => t.categoria === 'periferico'),
+                },
+                ram,
+                procesador: {
+                    familias: [...familias],
+                    valores: valoresProc,
+                },
+            },
+        });
+    } catch (error) {
+        console.error('Error en getOpciones:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// ==========================================
 // OBTENER EQUIPO POR ID (con periféricos)
 // ==========================================
 const getEquipoById = async (req, res) => {
@@ -348,7 +522,8 @@ const getEquipoById = async (req, res) => {
         const result = await pool.query(
             `SELECT eq.*, e.nombre as empresa_nombre,
                     td.nombre as tipo_nombre,
-                    pr.nombre as proceso_nombre
+                    pr.nombre as proceso_nombre,
+                    ${GARANTIA_COLUMNAS}
              FROM equipos eq
              JOIN empresas e ON eq.empresa_id = e.id
              LEFT JOIN tipo_dispositivo td ON eq.tipo_id = td.id
@@ -358,6 +533,7 @@ const getEquipoById = async (req, res) => {
         );
         if (result.rows.length === 0)
             return res.status(404).json({ success: false, message: 'Equipo no encontrado' });
+        enriquecerEquipos(result.rows);
         await attachPerifericos(result.rows);
         res.json({ success: true, data: result.rows[0] });
     } catch (error) {
@@ -406,6 +582,7 @@ const reasignarPerifericos = async (req, res) => {
 
 module.exports = {
     getEquipos,
+    getOpciones,
     getEquiposByEmpresa,
     getEquipoById,
     crearEquipo,

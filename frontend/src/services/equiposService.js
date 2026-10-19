@@ -1,7 +1,19 @@
 import api from './api';
 
-export const getEquipos = async () => {
-  return await api.get('/equipos');
+// filtros opcionales: { tipo_id, estado, empresa_id, sede_id, proceso_id, garantia,
+//                      ram, procesador_familia, procesador, q } — los de lista aceptan arrays
+export const getEquipos = async (filtros = {}) => {
+  const params = Object.fromEntries(
+    Object.entries(filtros)
+      .filter(([, v]) => v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && v.length === 0))
+      .map(([k, v]) => [k, Array.isArray(v) ? v.join(',') : v])
+  );
+  return await api.get('/equipos', { params });
+};
+
+// Catálogos para formularios y filtros: garantías, estados, tipos, RAM y procesadores
+export const getOpcionesEquipos = async () => {
+  return await api.get('/equipos/opciones');
 };
 
 export const getEquiposByEmpresa = async (empresaId) => {

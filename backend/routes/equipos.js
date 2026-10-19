@@ -3,6 +3,7 @@ const router = express.Router();
 const { verificarToken } = require('../middleware/auth');
 const {
     getEquipos,
+    getOpciones,
     getEquiposByEmpresa,
     getEquipoById,
     crearEquipo,
@@ -10,6 +11,7 @@ const {
     reasignarPerifericos
 } = require('../controllers/equiposController');
 
+router.get('/opciones', verificarToken, getOpciones);
 router.get('/empresa/:empresaId', verificarToken, getEquiposByEmpresa);
 router.get('/', verificarToken, getEquipos);
 router.get('/:id', verificarToken, getEquipoById);
