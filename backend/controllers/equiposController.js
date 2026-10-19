@@ -26,7 +26,9 @@ const resolverSede = async (empresaId, sedeId, sedeTexto) => {
     if (sedeId) {
         const r = await pool.query('SELECT id, nombre FROM sedes WHERE id = ? AND empresa_id = ?', [sedeId, empresaId]);
         if (r.rows.length === 0) return { error: 'La sede seleccionada no pertenece a la empresa del equipo' };
-        return { sede_id: r.rows[0].id, sede: r.rows[0].nombre };
+        // Conserva el detalle escrito (ej. "CACIQUE OT") si corresponde a la misma sede
+        const textoCoincide = sedeTexto?.trim() && normalizarNombreSede(sedeTexto) === r.rows[0].nombre;
+        return { sede_id: r.rows[0].id, sede: textoCoincide ? sedeTexto.trim() : r.rows[0].nombre };
     }
     const textoSede = sedeTexto?.trim() || null;
     if (!textoSede || !empresaId) return { sede_id: null, sede: textoSede };

@@ -17,6 +17,7 @@ import ResetPassword from './pages/ResetPassword';
 import ActivarCuenta from './pages/ActivarCuenta';
 import Empresas from './pages/Empresas';
 import Mantenimientos from './pages/Mantenimientos';
+import Stock from './pages/Stock';
 import './index.css';
 
 function App() {
@@ -93,6 +94,7 @@ function AppContent() {
           <Route path="/" element={<Navigate to="/super-admin" />} />
           <Route path="/super-admin" element={<SuperAdminDashboard />} />
           <Route path="/equipos" element={<Equipos />} />
+          <Route path="/stock" element={<Stock />} />
           <Route path="/usuarios" element={<Usuarios />} />
           <Route path="/empresas" element={<Empresas />} />
           <Route path="/auditoria" element={<Auditoria />} />
@@ -110,6 +112,7 @@ function AppContent() {
           <Route path="/" element={<Navigate to="/dashboard" />} />
           <Route path="/dashboard" element={<AdministradorDashboard />} />
           <Route path="/equipos" element={<Equipos />} />
+          <Route path="/stock" element={<Stock />} />
           <Route path="/usuarios" element={<Usuarios />} />
           <Route path="/auditoria" element={<Auditoria />} />
         </Routes>
@@ -125,6 +128,7 @@ function AppContent() {
           <Route path="/" element={<Navigate to="/dashboard" />} />
           <Route path="/dashboard" element={<LogisticaDashboard />} />
           <Route path="/equipos" element={<Equipos />} />
+          <Route path="/stock" element={<Stock />} />
           <Route path="/auditoria" element={<Auditoria />} />
         </Routes>
       </Layout>
@@ -139,6 +143,7 @@ function AppContent() {
           <Route path="/" element={<Navigate to="/dashboard" />} />
           <Route path="/dashboard" element={<SoporteDashboard />} />
           <Route path="/equipos" element={<Equipos />} />
+          <Route path="/stock" element={<Stock />} />
           <Route path="/mantenimientos" element={<Mantenimientos />} />
           <Route path="/auditoria" element={<Auditoria />} />
         </Routes>
@@ -154,6 +159,7 @@ function AppContent() {
           <Route path="/" element={<Navigate to="/dashboard" />} />
           <Route path="/dashboard" element={<GerenciaDashboard />} />
           <Route path="/equipos" element={<Equipos />} />
+          <Route path="/stock" element={<Stock />} />
           <Route path="/auditoria" element={<Auditoria />} />
         </Routes>
       </Layout>
@@ -168,6 +174,7 @@ function AppContent() {
           <Route path="/" element={<Navigate to="/dashboard" />} />
           <Route path="/dashboard" element={<FinancieraDashboard />} />
           <Route path="/equipos" element={<Equipos />} />
+          <Route path="/stock" element={<Stock />} />
         </Routes>
       </Layout>
     );
@@ -180,6 +187,7 @@ function AppContent() {
         <Route path="/" element={<Navigate to="/dashboard" />} />
         <Route path="/dashboard" element={<FinancieraDashboard />} />
         <Route path="/equipos" element={<Equipos />} />
+        <Route path="/stock" element={<Stock />} />
       </Routes>
     </Layout>
   );

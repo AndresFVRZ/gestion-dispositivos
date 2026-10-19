@@ -16,6 +16,11 @@ export const getOpcionesEquipos = async () => {
   return await api.get('/equipos/opciones');
 };
 
+// Hoja de vida: { equipo, movimientos[] } con anterior/nuevo asignado, quién y cuándo
+export const getHojaVida = async (id) => {
+  return await api.get(`/equipos/${id}/hoja-vida`);
+};
+
 export const getEquiposByEmpresa = async (empresaId) => {
   return await api.get(`/equipos/empresa/${empresaId}`);
 };

@@ -3,7 +3,7 @@
 // ==========================================
 import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
-import { getEquipos, crearEquipo, actualizarEquipo, getEquipoById, reasignarPerifericos } from '../services/equiposService';
+import { getEquipos, crearEquipo, actualizarEquipo, getEquipoById, reasignarPerifericos, getOpcionesEquipos, getHojaVida } from '../services/equiposService';
 import { getEmpresas, getEmpresasParaPrestamo } from '../services/empresasService';
 import { getSedes } from '../services/sedesService';
 import { getProcesos } from '../services/procesosService';
@@ -12,7 +12,7 @@ import { useAuth } from '../context/AuthContext';
 import ConfirmModal from '../components/Common/ConfirmModal';
 import ImportModal from '../components/Common/ImportModal';
 import LoadingOverlay from '../components/Common/LoadingOverlay';
-import { calcularGarantia, textoGarantia, colorGarantia, aTotalDias, diasADisplay, formatearDias } from '../utils/garantia';
+import { calcularGarantia, textoGarantia, colorGarantia, formatearDias } from '../utils/garantia';
 import { getLogoEmpresa } from '../utils/logos';
 import * as XLSX from 'xlsx';
 
@@ -42,8 +42,13 @@ function Equipos() {
   const [equipoDetalle, setEquipoDetalle] = useState(null);
   const [empresaFiltro, setEmpresaFiltro] = useState(null);
   const [perifericos, setPerifericos] = useState([]);
-  const [garantiaValor, setGarantiaValor] = useState('');
-  const [garantiaUnidad, setGarantiaUnidad] = useState('meses');
+  const [garantiaDias, setGarantiaDias] = useState('');
+  const [opciones, setOpciones] = useState({ garantias: [], estados: [], ram: [], procesador: { valores: [] } });
+  const [filtroTipo, setFiltroTipo] = useState('');
+  const [filtroSede, setFiltroSede] = useState('');
+  const [equiposTabla, setEquiposTabla] = useState(null); // último resultado filtrado por el API
+  const [cargandoTabla, setCargandoTabla] = useState(false);
+  const [hojaVida, setHojaVida] = useState(null);       // { equipo, movimientos, cargando }
   const [confirm, setConfirm] = useState(null);
   const [importModal, setImportModal] = useState({ estado: 'idle', progreso: 0, total: 0, importados: 0, errores: [] });
   const [tiposEquipo, setTiposEquipo] = useState([]);
@@ -75,10 +80,17 @@ function Equipos() {
     serial: '', estado: 'Disponible', ubicacion: '', piso: '', modulo: '', asignado_a: '',
     fecha_garantia: '', procesador: '', ram: '', disco_duro: '',
     sistema_operativo: '', garantia: '', especificaciones: '',
-    observaciones: '', empresa_id: '', numero_placa: '', proceso_id: ''
+    observaciones: '', empresa_id: '', numero_placa: '', proceso_id: '', sede_id: ''
   });
 
-  const estados = ['Disponible', 'Asignado', 'Préstamo', 'Mantenimiento', 'Dañado', 'Obsoleto', 'Baja', 'Canibalizar'];
+  // Estados desde el API (/equipos/opciones); 'Activo' solo lo usa la importación
+  const ESTADOS_BASE = ['Disponible', 'Asignado', 'Préstamo', 'Mantenimiento', 'Averiado', 'Dañado', 'Obsoleto', 'Baja', 'Canibalizar'];
+  const estados = opciones.estados.length
+    ? opciones.estados.map(e => e.valor).filter(e => e !== 'Activo')
+    : ESTADOS_BASE;
+  const estadosConObservaciones = opciones.estados.length
+    ? opciones.estados.filter(e => e.requiere_observaciones).map(e => e.valor)
+    : ['Mantenimiento', 'Averiado', 'Dañado', 'Baja', 'Canibalizar'];
   // En el formulario, solo gerencia/super_admin pueden seleccionar Baja o Canibalizar
   const estadosFormulario = puedeGestionarBaja
     ? estados
@@ -86,7 +98,7 @@ function Equipos() {
 
   // Normaliza los campos de texto a mayúsculas antes de enviar al API
   const CAMPOS_NO_UPPER = new Set(['empresa_id', 'tipo_id', 'proceso_id', 'prestado_a_empresa_id',
-    'sede', 'fecha_garantia', 'garantia', 'estado']);
+    'sede', 'sede_id', 'fecha_garantia', 'garantia', 'estado']);
   const normalizeFormData = (data) =>
     Object.fromEntries(Object.entries(data).map(([k, v]) =>
       [k, typeof v === 'string' && !CAMPOS_NO_UPPER.has(k) ? v.toUpperCase() : v]
@@ -96,12 +108,48 @@ function Equipos() {
     cargarDatos();
   }, []);
 
+  // Tabla filtrada por el API (tipo, estado, sede, proceso, empresa y búsqueda).
+  // Depende de `equipos` para refrescarse después de guardar (cargarDatos).
+  const hayFiltrosServidor = !!(filtroTipo || filtroEstado || filtroSede || filtroArea || filtroBusqueda.trim() || empresaFiltro);
+  useEffect(() => {
+    if (!hayFiltrosServidor) return;
+    let cancelado = false;
+    const t = setTimeout(async () => {
+      setCargandoTabla(true);
+      try {
+        const r = await getEquipos({
+          tipo_id: filtroTipo, estado: filtroEstado, sede_id: filtroSede,
+          proceso_id: filtroArea, empresa_id: empresaFiltro, q: filtroBusqueda.trim(),
+        });
+        if (!cancelado && r.success) setEquiposTabla(r.data);
+      } catch (error) {
+        if (!cancelado) toast.error(error.message || 'Error al filtrar equipos');
+      } finally {
+        if (!cancelado) setCargandoTabla(false);
+      }
+    }, filtroBusqueda ? 300 : 0);
+    return () => { cancelado = true; clearTimeout(t); };
+  }, [hayFiltrosServidor, filtroTipo, filtroEstado, filtroSede, filtroArea, filtroBusqueda, empresaFiltro, equipos]);
+
+  const abrirHojaVida = async (equipo) => {
+    setHojaVida({ equipo, movimientos: [], cargando: true });
+    try {
+      const r = await getHojaVida(equipo.id);
+      if (r.success) setHojaVida({ ...r.data, equipo: { ...equipo, ...r.data.equipo }, cargando: false });
+      else { toast.error(r.message || 'No se pudo cargar la hoja de vida'); setHojaVida(null); }
+    } catch (error) {
+      toast.error(error.message || 'No se pudo cargar la hoja de vida');
+      setHojaVida(null);
+    }
+  };
+
   const cargarDatos = async () => {
     try {
       setCargando(true);
-      const [empresasData, equiposData, sedesData, tiposEqData, tipsPeriData, todasEmpData, procesosData] = await Promise.all([
-        getEmpresas(), getEquipos(), getSedes(), getTiposEquipo(), getTiposPeriferico(), getEmpresasParaPrestamo(), getProcesos()
+      const [empresasData, equiposData, sedesData, tiposEqData, tipsPeriData, todasEmpData, procesosData, opcionesData] = await Promise.all([
+        getEmpresas(), getEquipos(), getSedes(), getTiposEquipo(), getTiposPeriferico(), getEmpresasParaPrestamo(), getProcesos(), getOpcionesEquipos()
       ]);
+      if (opcionesData.success) setOpciones(opcionesData.data);
       if (empresasData.success)  setEmpresas(empresasData.data);
       if (todasEmpData.success)  setTodasEmpresas(todasEmpData.data);
       if (equiposData.success)   setEquipos(equiposData.data);
@@ -123,11 +171,10 @@ function Equipos() {
       serial: '', estado: 'Disponible', ubicacion: '', piso: '', modulo: '', asignado_a: '',
       fecha_garantia: '', procesador: '', ram: '', disco_duro: '',
       sistema_operativo: '', garantia: '', especificaciones: '',
-      observaciones: '', empresa_id: empresaFiltro ? String(empresaFiltro) : (!esSuperAdmin && empresas.length === 1 ? String(empresas[0].id) : ''), numero_placa: '', sede: '', prestado_a_empresa_id: '', proceso_id: ''
+      observaciones: '', empresa_id: empresaFiltro ? String(empresaFiltro) : (!esSuperAdmin && empresas.length === 1 ? String(empresas[0].id) : ''), numero_placa: '', sede: '', sede_id: '', prestado_a_empresa_id: '', proceso_id: ''
     });
     setPerifericos([]);
-    setGarantiaValor('');
-    setGarantiaUnidad('meses');
+    setGarantiaDias('');
     setBusquedaSede('');
     setErrorForm('');
     setPasoActual(1);
@@ -149,7 +196,8 @@ function Equipos() {
       garantia: equipo.garantia || '', especificaciones: equipo.especificaciones || '',
       observaciones: equipo.observaciones || '',
       empresa_id: equipo.empresa_id || '', numero_placa: equipo.numero_placa || '',
-      sede: equipo.sede || '', prestado_a_empresa_id: equipo.prestado_a_empresa_id || '',
+      sede: equipo.sede || '', sede_id: equipo.sede_id || '',
+      prestado_a_empresa_id: equipo.prestado_a_empresa_id || '',
       proceso_id: equipo.proceso_id || ''
     });
     setBusquedaSede(equipo.sede || '');
@@ -166,9 +214,7 @@ function Equipos() {
             }
       )
     );
-    const disp = diasADisplay(equipo.garantia);
-    setGarantiaValor(disp.valor ? String(disp.valor) : '');
-    setGarantiaUnidad(disp.unidad);
+    setGarantiaDias(equipo.garantia ? String(equipo.garantia) : '');
     setErrorForm('');
     setPasoActual(1);
     setMostrarModal(true);
@@ -230,7 +276,7 @@ function Equipos() {
     try {
       const payload = {
         ...normalizeFormData(formData),
-        garantia: aTotalDias(garantiaValor, garantiaUnidad),
+        garantia: garantiaDias ? Number(garantiaDias) : null,
         perifericos: perifericos.filter(p => p.tipo_id || p.marca?.trim() || p.modelo?.trim() || p.serial?.trim() || p.descripcion?.trim())
       };
 
@@ -574,19 +620,16 @@ function Equipos() {
   const pisosDisponibles  = [...new Set(equipos.map(e => e.piso).filter(Boolean))].sort();
   const modulosDisponibles = [...new Set(equipos.map(e => e.modulo).filter(Boolean))].sort();
 
-  const equiposFiltrados = equipos.filter(equipo => {
-    if (empresaFiltro) {
-      const perteneceAEmpresa = equipo.empresa_id === empresaFiltro;
-      const prestadoAEmpresa  = equipo.prestado_a_empresa_id === empresaFiltro;
-      if (!perteneceAEmpresa && !prestadoAEmpresa) return false;
-    }
-    if (filtroEstado && equipo.estado !== filtroEstado) return false;
-    if (filtroArea && String(equipo.proceso_id) !== String(filtroArea)) return false;
-    if (!filtroBusqueda) return true;
-    const busqueda = filtroBusqueda.toLowerCase();
-    return equipo.nombre_equipo?.toLowerCase().includes(busqueda) ||
-           equipo.serial?.toLowerCase().includes(busqueda);
-  });
+  // Sin filtros se muestra la lista completa; con filtros, lo que devuelve el API
+  const equiposFiltrados = hayFiltrosServidor ? (equiposTabla ?? equipos) : equipos;
+  const hayFiltrosActivos = filtroBusqueda || filtroEstado || filtroArea || filtroTipo || filtroSede;
+  const limpiarFiltros = () => {
+    setFiltroBusqueda(''); setFiltroEstado(''); setFiltroArea(''); setFiltroTipo(''); setFiltroSede(''); setPaginaActual(1);
+  };
+
+  // Sedes para el filtro: las de la empresa activa, o todas (con la empresa si hay varias)
+  const sedesParaFiltro = sedes.filter(s => !empresaFiltro || s.empresa_id === empresaFiltro);
+  const variasEmpresasEnSedes = new Set(sedesParaFiltro.map(s => s.empresa_id)).size > 1;
 
   const totalPaginas = Math.max(1, Math.ceil(equiposFiltrados.length / itemsPorPagina));
   const paginaSegura = Math.min(paginaActual, totalPaginas);
@@ -632,7 +675,7 @@ function Equipos() {
         <div className="eq-selector-scroll">
           <button
             className={`eq-sel-card ${empresaFiltro === null ? 'eq-sel-card-active' : ''}`}
-            onClick={() => { setEmpresaFiltro(null); setPaginaActual(1); }}
+            onClick={() => { setEmpresaFiltro(null); setFiltroSede(''); setPaginaActual(1); }}
           >
             <div className="eq-sel-avatar eq-sel-avatar-all">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="20" height="20">
@@ -650,7 +693,7 @@ function Equipos() {
               <button
                 key={emp.id}
                 className={`eq-sel-card ${activa ? 'eq-sel-card-active' : ''}`}
-                onClick={() => { setEmpresaFiltro(emp.id); setPaginaActual(1); }}
+                onClick={() => { setEmpresaFiltro(emp.id); setFiltroSede(''); setPaginaActual(1); }}
               >
                 <div className="eq-sel-avatar">
                   {logo
@@ -669,10 +712,18 @@ function Equipos() {
       <div className="filter-container">
         <input
           className="filter-input"
-          placeholder="Buscar por nombre o código..."
+          placeholder="Buscar por nombre, código, serial, placa o asignado..."
           value={filtroBusqueda}
           onChange={e => { setFiltroBusqueda(e.target.value); setPaginaActual(1); }}
         />
+        <select
+          className="filter-select"
+          value={filtroTipo}
+          onChange={e => { setFiltroTipo(e.target.value); setPaginaActual(1); }}
+        >
+          <option value="">Todos los tipos</option>
+          {tiposEquipo.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
+        </select>
         <select
           className="filter-select"
           value={filtroEstado}
@@ -680,6 +731,16 @@ function Equipos() {
         >
           <option value="">Todos los estados</option>
           {estados.map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
+        <select
+          className="filter-select"
+          value={filtroSede}
+          onChange={e => { setFiltroSede(e.target.value); setPaginaActual(1); }}
+        >
+          <option value="">Todas las sedes</option>
+          {sedesParaFiltro.map(s => (
+            <option key={s.id} value={s.id}>{s.nombre}{variasEmpresasEnSedes ? ` (${s.empresa_nombre})` : ''}</option>
+          ))}
         </select>
         <select
           className="filter-select"
@@ -691,14 +752,12 @@ function Equipos() {
             .sort((a, b) => a.nombre.localeCompare(b.nombre))
             .map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
         </select>
-        {(filtroBusqueda || filtroEstado || filtroArea) && (
-          <button
-            className="filter-clear"
-            onClick={() => { setFiltroBusqueda(''); setFiltroEstado(''); setFiltroArea(''); setPaginaActual(1); }}
-          >
+        {hayFiltrosActivos && (
+          <button className="filter-clear" onClick={limpiarFiltros}>
             Limpiar filtros
           </button>
         )}
+        {cargandoTabla && <span className="filter-status">Filtrando...</span>}
       </div>
 
       <div className="table-container">
@@ -712,6 +771,7 @@ function Equipos() {
                 <th>Estado</th>
                 <th>Garantía</th>
                 <th>Asignado a</th>
+                <th>Sede</th>
                 <th>Proceso</th>
                 <th>Acciones</th>
               </tr>
@@ -719,8 +779,8 @@ function Equipos() {
             <tbody>
               {equiposPaginados.length === 0 ? (
                 <tr>
-                  <td colSpan={(esSuperAdmin ? 1 : 0) + 7} className="empty-cell">
-                    No hay equipos registrados
+                  <td colSpan={(esSuperAdmin ? 1 : 0) + 8} className="empty-cell">
+                    {hayFiltrosActivos || empresaFiltro ? 'No hay equipos que coincidan con los filtros' : 'No hay equipos registrados'}
                   </td>
                 </tr>
               ) : (
@@ -732,7 +792,7 @@ function Equipos() {
                       <td className="equipo-cell">{e.nombre_equipo || '-'}</td>
                       <td>{e.tipo_nombre || '-'}</td>
                       <td>
-                        <span className={`badge ${e.estado === 'Activo' ? 'badge-success' : e.estado === 'Asignado' ? 'badge-info' : e.estado === 'Préstamo' ? 'badge-warning' : e.estado === 'Dañado' ? 'badge-danger' : 'badge-neutral'}`}>
+                        <span className={`badge ${e.estado === 'Activo' ? 'badge-success' : e.estado === 'Asignado' ? 'badge-info' : e.estado === 'Préstamo' ? 'badge-warning' : ['Dañado', 'Averiado'].includes(e.estado) ? 'badge-danger' : 'badge-neutral'}`}>
                           {e.estado || '-'}
                         </span>
                         {e.estado === 'Préstamo' && e.prestado_a_empresa_id && (() => {
@@ -767,9 +827,11 @@ function Equipos() {
                         return <span style={{ background: c.bg, color: c.color, border: `1px solid ${c.border}`, borderRadius: '6px', padding: '2px 7px', fontSize: '11px', fontWeight: '500', whiteSpace: 'nowrap' }}>{texto}</span>;
                       })()}</td>
                       <td>{e.asignado_a || '-'}</td>
+                      <td>{e.sede_nombre || e.sede || '-'}</td>
                       <td>{e.proceso_nombre || '-'}</td>
                       <td className="acciones-cell">
                         <button className="btn-view" onClick={() => verDetalleEquipo(e)}>Ver</button>
+                        <button className="btn-hoja" onClick={() => abrirHojaVida(e)}>Hoja de vida</button>
                         {puedeEditarCompleto && <button className="btn-edit" onClick={() => abrirModalEditar(e)}>Editar</button>}
                         {esSoporte && <button className="btn-edit" onClick={() => abrirModalAsignar(e)}>Asignar</button>}
                         {esGerencia && !['Baja','Canibalizar'].includes(e.estado) && (
@@ -994,7 +1056,7 @@ function Equipos() {
                     {(esSuperAdmin || empresas.length > 1) && !empresaFiltro && (
                       <div className="form-group req">
                         <label>Empresa</label>
-                        <select value={formData.empresa_id} onChange={e => setFormData({...formData, empresa_id: e.target.value, sede: '', proceso_id: ''})}>
+                        <select value={formData.empresa_id} onChange={e => { setFormData({...formData, empresa_id: e.target.value, sede: '', sede_id: '', proceso_id: ''}); setBusquedaSede(''); }}>
                           <option value="">Seleccionar</option>
                           {empresas.map(emp => <option key={emp.id} value={emp.id}>{emp.nombre}</option>)}
                         </select>
@@ -1039,13 +1101,13 @@ function Equipos() {
                         </select>
                       </div>
                     )}
-                    {(['Dañado', 'Mantenimiento', 'Baja', 'Canibalizar'].includes(formData.estado) || formData.observaciones) && (
+                    {(estadosConObservaciones.includes(formData.estado) || formData.observaciones) && (
                       <div className="form-group req observaciones-group">
                         <label className="observaciones-label">
                           Falla / Observaciones
-                          {['Dañado', 'Mantenimiento', 'Baja', 'Canibalizar'].includes(formData.estado) && <span className="observaciones-badge">{formData.estado}</span>}
+                          {estadosConObservaciones.includes(formData.estado) && <span className="observaciones-badge">{formData.estado}</span>}
                         </label>
-                        <textarea rows={3} required={['Dañado', 'Mantenimiento', 'Baja', 'Canibalizar'].includes(formData.estado)}
+                        <textarea rows={3} required={estadosConObservaciones.includes(formData.estado)}
                           placeholder="Describe la falla o posible falla del equipo..."
                           value={formData.observaciones} onChange={e => setFormData({...formData, observaciones: e.target.value})} />
                       </div>
@@ -1066,7 +1128,7 @@ function Equipos() {
                           value={busquedaSede}
                           onChange={e => {
                             setBusquedaSede(e.target.value);
-                            setFormData(prev => ({...prev, sede: e.target.value, proceso_id: e.target.value.trim() ? prev.proceso_id : ''}));
+                            setFormData(prev => ({...prev, sede: e.target.value, sede_id: '', proceso_id: e.target.value.trim() ? prev.proceso_id : ''}));
                             setShowDropdownSede(true);
                           }}
                           onFocus={() => setShowDropdownSede(true)}
@@ -1079,7 +1141,7 @@ function Equipos() {
                               <div style={{ padding: '10px 14px', color: '#94a3b8', fontSize: '13px', textAlign: 'center' }}>Sin sedes disponibles</div>
                             ) : sedesCombo.map(s => (
                               <div key={s.id}
-                                onMouseDown={() => { setBusquedaSede(s.nombre); setFormData(prev => ({...prev, sede: s.nombre})); setShowDropdownSede(false); }}
+                                onMouseDown={() => { setBusquedaSede(s.nombre); setFormData(prev => ({...prev, sede: s.nombre, sede_id: s.id})); setShowDropdownSede(false); }}
                                 style={{ padding: '9px 14px', cursor: 'pointer', fontSize: '13px', borderBottom: '1px solid #f1f5f9', fontWeight: 500, color: '#1e293b' }}
                                 onMouseEnter={e => e.currentTarget.style.background = '#f0f7ff'}
                                 onMouseLeave={e => e.currentTarget.style.background = 'white'}
@@ -1128,8 +1190,22 @@ function Equipos() {
                 {/* ── Paso 3: Especificaciones técnicas ── */}
                 {pasoActual === 3 && (
                   <div className="form-grid">
-                    <div className="form-group req"><label>Procesador</label><input type="text" value={formData.procesador} onChange={e => setFormData(prev => ({...prev, procesador: e.target.value}))} /></div>
-                    <div className="form-group req"><label>RAM</label><input type="text" value={formData.ram} onChange={e => setFormData(prev => ({...prev, ram: e.target.value}))} /></div>
+                    <div className="form-group req">
+                      <label>Procesador</label>
+                      <input type="text" list="procesadores-lista" placeholder="Ej: INTEL CORE I5 1135G7"
+                        value={formData.procesador} onChange={e => setFormData(prev => ({...prev, procesador: e.target.value}))} />
+                      <datalist id="procesadores-lista">
+                        {opciones.procesador.valores.map(p => <option key={p} value={p} />)}
+                      </datalist>
+                    </div>
+                    <div className="form-group req">
+                      <label>RAM</label>
+                      <input type="text" list="ram-lista" placeholder="Ej: 8 GB"
+                        value={formData.ram} onChange={e => setFormData(prev => ({...prev, ram: e.target.value}))} />
+                      <datalist id="ram-lista">
+                        {opciones.ram.map(r => <option key={r.gb} value={r.label} />)}
+                      </datalist>
+                    </div>
                     <div className="form-group req"><label>Disco Duro</label><input type="text" value={formData.disco_duro} onChange={e => setFormData(prev => ({...prev, disco_duro: e.target.value}))} /></div>
                     <div className="form-group req"><label>Sistema Operativo</label><input type="text" value={formData.sistema_operativo} onChange={e => setFormData(prev => ({...prev, sistema_operativo: e.target.value}))} /></div>
                     <div className="form-group opc">
@@ -1138,28 +1214,20 @@ function Equipos() {
                     </div>
                     <div className="form-group opc">
                       <label>Duración garantía</label>
-                      <div className="garantia-nav">
-                        {[{label:'6 meses',valor:'6',unidad:'meses'},{label:'1 año',valor:'1',unidad:'años'},{label:'3 años',valor:'3',unidad:'años'}].map(op => {
-                          const activo = garantiaValor === op.valor && garantiaUnidad === op.unidad;
-                          return (
-                            <button key={op.label} type="button"
-                              className={`garantia-btn${activo ? ' garantia-btn-active' : ''}`}
-                              onClick={() => {
-                                if (activo) { setGarantiaValor(''); setGarantiaUnidad('meses'); }
-                                else { setGarantiaValor(op.valor); setGarantiaUnidad(op.unidad); }
-                              }}>
-                              {op.label}
-                            </button>
-                          );
-                        })}
-                      </div>
+                      <select value={garantiaDias} onChange={e => setGarantiaDias(e.target.value)}>
+                        <option value="">Sin garantía</option>
+                        {opciones.garantias.map(g => <option key={g.dias} value={g.dias}>{g.label}</option>)}
+                        {garantiaDias && !opciones.garantias.some(g => String(g.dias) === String(garantiaDias)) && (
+                          <option value={garantiaDias}>Valor anterior ({garantiaDias} días)</option>
+                        )}
+                      </select>
                       {(() => {
-                        if (!garantiaValor || !formData.fecha_garantia) return (
+                        if (!garantiaDias || !formData.fecha_garantia) return (
                           <span style={{fontSize:'10px',color:'#94a3b8',marginTop:'4px',display:'block'}}>
-                            {!formData.fecha_garantia && garantiaValor ? 'Ingresa la fecha de inicio' : 'Fecha fin: N/A'}
+                            {!formData.fecha_garantia && garantiaDias ? 'Ingresa la fecha de inicio' : 'Fecha fin: N/A'}
                           </span>
                         );
-                        const dias = aTotalDias(garantiaValor, garantiaUnidad);
+                        const dias = Number(garantiaDias);
                         const inicio = new Date(formData.fecha_garantia + 'T12:00:00');
                         const fin = new Date(inicio);
                         fin.setDate(fin.getDate() + dias);
@@ -1262,7 +1330,7 @@ function Equipos() {
                 </div>
               )}
               <div><strong>Empresa:</strong> {empresas.find(e => e.id === equipoDetalle.empresa_id)?.nombre || '-'}</div>
-              <div><strong>Sede:</strong> {equipoDetalle.sede || <span style={{color:'#94a3b8'}}>Sin sede</span>}</div>
+              <div><strong>Sede:</strong> {equipoDetalle.sede_nombre || equipoDetalle.sede || <span style={{color:'#94a3b8'}}>Sin sede</span>}</div>
               {equipoDetalle.estado === 'Préstamo' && equipoDetalle.prestado_a_empresa_id && (() => {
                 const esOwner = empresaFiltro
                   ? empresaFiltro === equipoDetalle.empresa_id
@@ -1322,13 +1390,77 @@ function Equipos() {
                 </div>
               )}
             </div>
-            <div className="modal-footer"><button className="btn-primary" onClick={() => setMostrarModalDetalle(false)}>Cerrar</button></div>
+            <div className="modal-footer">
+              <button className="btn-secondary" onClick={() => { setMostrarModalDetalle(false); abrirHojaVida(equipoDetalle); }}>Ver hoja de vida</button>
+              <button className="btn-primary" onClick={() => setMostrarModalDetalle(false)}>Cerrar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Hoja de vida (historial de asignaciones) */}
+      {hojaVida && (
+        <div className="modal-overlay" onClick={() => setHojaVida(null)}>
+          <div className="modal-content modal-large" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Hoja de vida — {hojaVida.equipo.nombre_equipo || hojaVida.equipo.codigo || 'Equipo'}</h2>
+              <button className="modal-close" onClick={() => setHojaVida(null)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <div className="hv-resumen">
+                <span><strong>Serial:</strong> {hojaVida.equipo.serial || '-'}</span>
+                <span><strong>Estado actual:</strong> {hojaVida.equipo.estado || '-'}</span>
+                <span><strong>Asignado a:</strong> {hojaVida.equipo.asignado_a || 'Sin asignar'}</span>
+                <span><strong>Sede:</strong> {hojaVida.equipo.sede_nombre || hojaVida.equipo.sede || '-'}</span>
+              </div>
+              {hojaVida.cargando ? (
+                <p className="hv-vacio">Cargando historial...</p>
+              ) : hojaVida.movimientos.length === 0 ? (
+                <p className="hv-vacio">Este equipo aún no tiene movimientos registrados.</p>
+              ) : (
+                <ol className="hv-timeline">
+                  {hojaVida.movimientos.map(m => (
+                    <li key={m.id} className="hv-item">
+                      <div className="hv-head">
+                        <span className={`hv-tipo hv-tipo-${m.tipo_movimiento.toLowerCase()}`}>{TIPOS_MOVIMIENTO[m.tipo_movimiento] || m.tipo_movimiento}</span>
+                        <span className="hv-fecha">
+                          {new Date(m.fecha).toLocaleString('es-CO', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                      <div className="hv-grid">
+                        <div><span className="hv-label">Anterior asignado</span>{m.asignado_anterior || <em>Sin asignar</em>}</div>
+                        <div><span className="hv-label">Nuevo asignado</span>{m.asignado_nuevo || <em>Sin asignar</em>}</div>
+                        <div><span className="hv-label">Asignado por</span>{m.realizado_por_nombre || <em>Sistema / carga inicial</em>}</div>
+                        {m.estado_anterior !== m.estado_nuevo && (
+                          <div><span className="hv-label">Estado</span>{m.estado_anterior ? `${m.estado_anterior} → ${m.estado_nuevo || '—'}` : m.estado_nuevo}</div>
+                        )}
+                        {m.sede_anterior !== m.sede_nueva && (
+                          <div><span className="hv-label">Sede</span>{m.sede_anterior ? `${m.sede_anterior} → ${m.sede_nueva || '—'}` : m.sede_nueva}</div>
+                        )}
+                      </div>
+                      {m.observaciones && <p className="hv-obs">{m.observaciones}</p>}
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </div>
+            <div className="modal-footer"><button className="btn-primary" onClick={() => setHojaVida(null)}>Cerrar</button></div>
           </div>
         </div>
       )}
     </div>
   );
 }
+
+const TIPOS_MOVIMIENTO = {
+  ASIGNACION: 'Asignación',
+  DEVOLUCION: 'Devolución',
+  REASIGNACION: 'Reasignación',
+  TRASLADO: 'Traslado de sede',
+  PRESTAMO: 'Préstamo',
+  CAMBIO_ESTADO: 'Cambio de estado',
+  BAJA: 'Baja',
+};
 
 export default Equipos;
 
@@ -1457,11 +1589,26 @@ equiposStyles.textContent = `
   .stepper-item.active .stepper-label { color: #1a3a5c; font-weight: 700; }
   .stepper-item.done .stepper-label { color: #1a3a5c; }
 
-  .garantia-nav { display: flex; border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden; }
-  .garantia-btn { flex: 1; padding: 6px 0; font-size: 11px; font-weight: 500; background: white; border: none; border-right: 1px solid #e2e8f0; cursor: pointer; color: #64748b; transition: all 0.15s; }
-  .garantia-btn:last-child { border-right: none; }
-  .garantia-btn:hover:not(.garantia-btn-active) { background: #f0f7ff; color: #1a3a5c; }
-  .garantia-btn-active { background: #1a3a5c; color: white; font-weight: 600; }
+  /* Hoja de vida */
+  .btn-hoja { background: #ecfdf5; color: #047857; padding: 2px 6px; border-radius: 4px; border: none; cursor: pointer; font-size: 9px; font-weight: 500; margin-right: 3px; }
+  .filter-status { font-size: 11px; color: #64748b; }
+  .hv-resumen { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 12px; color: #334155; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; }
+  .hv-vacio { font-size: 13px; color: #94a3b8; text-align: center; padding: 20px 0; margin: 0; }
+  .hv-timeline { list-style: none; margin: 0; padding: 0 0 0 14px; border-left: 2px solid #e2e8f0; display: flex; flex-direction: column; gap: 12px; }
+  .hv-item { position: relative; background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; }
+  .hv-item::before { content: ''; position: absolute; left: -21px; top: 14px; width: 10px; height: 10px; border-radius: 50%; background: #1a3a5c; border: 2px solid white; box-shadow: 0 0 0 1px #cbd5e1; }
+  .hv-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+  .hv-tipo { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; padding: 2px 8px; border-radius: 10px; background: #edf2f7; color: #4a5568; }
+  .hv-tipo-asignacion, .hv-tipo-reasignacion { background: #dbeafe; color: #1e40af; }
+  .hv-tipo-devolucion { background: #dcfce7; color: #166534; }
+  .hv-tipo-traslado, .hv-tipo-prestamo { background: #fef3c7; color: #92400e; }
+  .hv-tipo-cambio_estado { background: #ede9fe; color: #5b21b6; }
+  .hv-tipo-baja { background: #fee2e2; color: #991b1b; }
+  .hv-fecha { font-size: 11px; color: #64748b; }
+  .hv-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 6px 14px; font-size: 12px; color: #1e293b; }
+  .hv-grid em { color: #94a3b8; font-style: normal; }
+  .hv-label { display: block; font-size: 10px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.3px; }
+  .hv-obs { margin: 8px 0 0; font-size: 12px; color: #475569; background: #f8fafc; border-radius: 6px; padding: 6px 10px; white-space: pre-wrap; }
 
   .form-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
   .form-group { margin-bottom: 0; }

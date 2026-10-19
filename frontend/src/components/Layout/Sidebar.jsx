@@ -12,6 +12,7 @@ const ICONS = {
   Auditoria:       'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2',
   Sedes:           'M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0zM15 11a3 3 0 11-6 0 3 3 0 016 0z',
   Mantenimientos:  'M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z',
+  Stock:           'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4',
 };
 
 const Icon = ({ d, size = 18 }) => (
@@ -58,6 +59,7 @@ const Sidebar = () => {
     super_admin: [
       { path: '/super-admin',    nombre: 'Inicio'          },
       { path: '/equipos',        nombre: 'Equipos'         },
+      { path: '/stock',          nombre: 'Stock'           },
       { path: '/mantenimientos', nombre: 'Mantenimientos'  },
       { path: '/usuarios',       nombre: 'Usuarios'        },
       { path: '/empresas',       nombre: 'Empresas'        },
@@ -66,28 +68,33 @@ const Sidebar = () => {
     administrador: [
       { path: '/dashboard', nombre: 'Inicio'    },
       { path: '/equipos',   nombre: 'Equipos'   },
+      { path: '/stock',     nombre: 'Stock'     },
       { path: '/usuarios',  nombre: 'Usuarios'  },
       { path: '/auditoria', nombre: 'Auditoria' },
     ],
     logistica: [
       { path: '/dashboard', nombre: 'Inicio'    },
       { path: '/equipos',   nombre: 'Equipos'   },
+      { path: '/stock',     nombre: 'Stock'     },
       { path: '/auditoria', nombre: 'Auditoria' },
     ],
     soporte: [
       { path: '/dashboard',      nombre: 'Inicio'         },
       { path: '/equipos',        nombre: 'Equipos'        },
+      { path: '/stock',          nombre: 'Stock'          },
       { path: '/mantenimientos', nombre: 'Mantenimientos' },
       { path: '/auditoria',      nombre: 'Auditoria'      },
     ],
     gerencia: [
       { path: '/dashboard', nombre: 'Inicio'    },
       { path: '/equipos',   nombre: 'Equipos'   },
+      { path: '/stock',     nombre: 'Stock'     },
       { path: '/auditoria', nombre: 'Auditoria' },
     ],
     financiera: [
       { path: '/dashboard', nombre: 'Inicio'   },
       { path: '/equipos',   nombre: 'Equipos'  },
+      { path: '/stock',     nombre: 'Stock'    },
     ],
   };
 
