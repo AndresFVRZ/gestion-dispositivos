@@ -14,6 +14,7 @@ import ImportModal from '../components/Common/ImportModal';
 import LoadingOverlay from '../components/Common/LoadingOverlay';
 import { calcularGarantia, textoGarantia, colorGarantia, formatearDias } from '../utils/garantia';
 import { getLogoEmpresa } from '../utils/logos';
+import { estiloBadgeEstado } from '../utils/estados';
 import * as XLSX from 'xlsx';
 
 // ==========================================
@@ -792,7 +793,7 @@ function Equipos() {
                       <td className="equipo-cell">{e.nombre_equipo || '-'}</td>
                       <td>{e.tipo_nombre || '-'}</td>
                       <td>
-                        <span className={`badge ${e.estado === 'Activo' ? 'badge-success' : e.estado === 'Asignado' ? 'badge-info' : e.estado === 'Préstamo' ? 'badge-warning' : ['Dañado', 'Averiado'].includes(e.estado) ? 'badge-danger' : 'badge-neutral'}`}>
+                        <span className="badge" style={estiloBadgeEstado(e.estado)}>
                           {e.estado || '-'}
                         </span>
                         {e.estado === 'Préstamo' && e.prestado_a_empresa_id && (() => {
@@ -1310,7 +1311,7 @@ function Equipos() {
 
               <div><strong>Equipo:</strong> {equipoDetalle.nombre_equipo || '-'}</div>
               <div><strong>Tipo:</strong> {equipoDetalle.tipo_nombre || '-'}</div>
-              <div><strong>Estado:</strong> {equipoDetalle.estado || '-'}</div>
+              <div><strong>Estado:</strong> {equipoDetalle.estado ? <span className="badge" style={estiloBadgeEstado(equipoDetalle.estado)}>{equipoDetalle.estado}</span> : '-'}</div>
               <div><strong>Marca:</strong> {equipoDetalle.marca || '-'}</div>
               <div><strong>Modelo:</strong> {equipoDetalle.modelo || '-'}</div>
               <div><strong>Serial:</strong> {equipoDetalle.serial || '-'}</div>
@@ -1409,7 +1410,7 @@ function Equipos() {
             <div className="modal-body">
               <div className="hv-resumen">
                 <span><strong>Serial:</strong> {hojaVida.equipo.serial || '-'}</span>
-                <span><strong>Estado actual:</strong> {hojaVida.equipo.estado || '-'}</span>
+                <span><strong>Estado actual:</strong> {hojaVida.equipo.estado ? <span className="badge" style={estiloBadgeEstado(hojaVida.equipo.estado)}>{hojaVida.equipo.estado}</span> : '-'}</span>
                 <span><strong>Asignado a:</strong> {hojaVida.equipo.asignado_a || 'Sin asignar'}</span>
                 <span><strong>Sede:</strong> {hojaVida.equipo.sede_nombre || hojaVida.equipo.sede || '-'}</span>
               </div>
@@ -1432,7 +1433,11 @@ function Equipos() {
                         <div><span className="hv-label">Nuevo asignado</span>{m.asignado_nuevo || <em>Sin asignar</em>}</div>
                         <div><span className="hv-label">Asignado por</span>{m.realizado_por_nombre || <em>Sistema / carga inicial</em>}</div>
                         {m.estado_anterior !== m.estado_nuevo && (
-                          <div><span className="hv-label">Estado</span>{m.estado_anterior ? `${m.estado_anterior} → ${m.estado_nuevo || '—'}` : m.estado_nuevo}</div>
+                          <div>
+                            <span className="hv-label">Estado</span>
+                            {m.estado_anterior && <><span className="badge" style={estiloBadgeEstado(m.estado_anterior)}>{m.estado_anterior}</span> → </>}
+                            {m.estado_nuevo ? <span className="badge" style={estiloBadgeEstado(m.estado_nuevo)}>{m.estado_nuevo}</span> : '—'}
+                          </div>
                         )}
                         {m.sede_anterior !== m.sede_nueva && (
                           <div><span className="hv-label">Sede</span>{m.sede_anterior ? `${m.sede_anterior} → ${m.sede_nueva || '—'}` : m.sede_nueva}</div>
@@ -1520,7 +1525,7 @@ equiposStyles.textContent = `
   .codigo-cell { font-weight: 600; color: #1a3a5c; }
   .empresa-cell, .equipo-cell { font-weight: 500; }
   
-  .badge { display: inline-block; padding: 2px 6px; border-radius: 10px; font-size: 9px; font-weight: 500; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600; white-space: nowrap; }
   .badge-success { background: #c6f6d5; color: #22543d; }
   .badge-info { background: #bee3f8; color: #2c5282; }
   .badge-warning { background: #feebc8; color: #7b341e; }

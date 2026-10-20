@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { getLogoEmpresa } from '../utils/logos';
 import { calcularGarantia } from '../utils/garantia';
+import { estiloBadgeEstado } from '../utils/estados';
 
 function GestionDashboard() {
   const { usuario } = useAuth();
@@ -69,17 +70,7 @@ function GestionDashboard() {
     { label: 'Otros',          count: otros,         color: '#e2e8f0' },
   ].filter(s => s.count > 0);
 
-  const estadoStyle = (estado) => {
-    const map = {
-      'Disponible':    { background: '#f0fdf4', color: '#15803d' },
-      'Asignado':      { background: '#eff6ff', color: '#1d4ed8' },
-      'Préstamo':      { background: '#fefce8', color: '#b45309' },
-      'Mantenimiento': { background: '#fff7ed', color: '#c2410c' },
-      'Dañado':        { background: '#fef2f2', color: '#dc2626' },
-      'Baja':          { background: '#f1f5f9', color: '#475569' },
-    };
-    return map[estado] || { background: '#f1f5f9', color: '#475569' };
-  };
+  const estadoStyle = estiloBadgeEstado;
 
   if (cargando) return <div className="gd-loading">Cargando dashboard...</div>;
 

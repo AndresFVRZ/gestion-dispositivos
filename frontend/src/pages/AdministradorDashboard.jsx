@@ -5,6 +5,7 @@ import { getUsuarios } from '../services/usuariosService';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { getLogoEmpresa } from '../utils/logos';
+import { estiloBadgeEstado } from '../utils/estados';
 
 function AdministradorDashboard() {
   const { usuario } = useAuth();
@@ -41,18 +42,7 @@ function AdministradorDashboard() {
 
   const fecha = new Date().toLocaleDateString('es-CO', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
-  const estadoStyle = (estado) => {
-    const map = {
-      'Disponible':    { background: '#f0fdf4', color: '#15803d' },
-      'Asignado':      { background: '#eff6ff', color: '#1d4ed8' },
-      'Préstamo':      { background: '#fefce8', color: '#b45309' },
-      'Mantenimiento': { background: '#fff7ed', color: '#c2410c' },
-      'Dañado':        { background: '#fef2f2', color: '#dc2626' },
-      'Baja':          { background: '#f1f5f9', color: '#475569' },
-      'Canibalizar':   { background: '#fdf4ff', color: '#7c3aed' },
-    };
-    return map[estado] || { background: '#f1f5f9', color: '#475569' };
-  };
+  const estadoStyle = estiloBadgeEstado;
 
   if (cargando) return <div className="ad-loading">Cargando panel...</div>;
 
