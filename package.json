@@ -10,7 +10,8 @@
     "dev:frontend": "pnpm --filter frontend dev",
     "start": "pnpm --filter backend start",
     "build": "pnpm --filter frontend build",
-    "lint": "pnpm --filter frontend lint"
+    "lint": "pnpm --filter frontend lint",
+    "test": "pnpm --filter backend test"
   },
   "devDependencies": {
     "concurrently": "^9.1.0"

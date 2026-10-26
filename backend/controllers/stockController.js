@@ -62,7 +62,7 @@ const getStock = async (req, res) => {
         res.json({ success: true, data: result.rows });
     } catch (error) {
         console.error('Error getStock:', error.message);
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'Error interno del servidor' });
     }
 };
 
@@ -92,7 +92,7 @@ const crearParte = async (req, res) => {
         if (error.code === 'ER_DUP_ENTRY')
             return res.status(409).json({ success: false, message: 'Ya existe esa parte (mismo nombre, marca y modelo) en la sede' });
         console.error('Error crearParte:', error.message);
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'Error interno del servidor' });
     }
 };
 
@@ -131,7 +131,7 @@ const actualizarParte = async (req, res) => {
         if (error.code === 'ER_DUP_ENTRY')
             return res.status(409).json({ success: false, message: 'Ya existe esa parte (mismo nombre, marca y modelo) en la sede' });
         console.error('Error actualizarParte:', error.message);
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'Error interno del servidor' });
     }
 };
 
@@ -160,7 +160,7 @@ const ajustarCantidad = async (req, res) => {
         res.json({ success: true, data: parte });
     } catch (error) {
         console.error('Error ajustarCantidad:', error.message);
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'Error interno del servidor' });
     }
 };
 
@@ -175,7 +175,7 @@ const eliminarParte = async (req, res) => {
         res.json({ success: true, message: 'Parte eliminada' });
     } catch (error) {
         console.error('Error eliminarParte:', error.message);
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'Error interno del servidor' });
     }
 };
 

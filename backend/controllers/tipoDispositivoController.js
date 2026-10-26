@@ -12,7 +12,8 @@ const getTipos = async (req, res) => {
         const result = await pool.query(query, params);
         res.json({ success: true, data: result.rows });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        console.error(error);
+        res.status(500).json({ success: false, message: 'Error interno del servidor' });
     }
 };
 
@@ -31,7 +32,8 @@ const crearTipo = async (req, res) => {
         const sel = await pool.query('SELECT * FROM tipo_dispositivo WHERE id = ?', [ins.insertId]);
         res.status(201).json({ success: true, data: sel.rows[0] });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        console.error(error);
+        res.status(500).json({ success: false, message: 'Error interno del servidor' });
     }
 };
 
@@ -54,7 +56,8 @@ const eliminarTipo = async (req, res) => {
 
         res.json({ success: true, message: 'Tipo eliminado' });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        console.error(error);
+        res.status(500).json({ success: false, message: 'Error interno del servidor' });
     }
 };
 

@@ -257,7 +257,7 @@ const getEquipos = async (req, res) => {
         res.json({ success: true, data: equipos, total: equipos.length });
     } catch (error) {
         console.error('Error:', error);
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'Error interno del servidor' });
     }
 };
 
@@ -283,7 +283,7 @@ const getEquiposByEmpresa = async (req, res) => {
         res.json({ success: true, data: result.rows });
     } catch (error) {
         console.error('Error en getEquiposByEmpresa:', error);
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'Error interno del servidor' });
     }
 };
 
@@ -375,7 +375,7 @@ const crearEquipo = async (req, res) => {
         }
     } catch (error) {
         console.error('Error en crearEquipo:', error);
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'Error interno del servidor' });
     }
 };
 
@@ -489,7 +489,7 @@ const actualizarEquipo = async (req, res) => {
         }
     } catch (error) {
         console.error('Error en actualizarEquipo:', error);
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'Error interno del servidor' });
     }
 };
 
@@ -537,7 +537,7 @@ const getOpciones = async (req, res) => {
         });
     } catch (error) {
         console.error('Error en getOpciones:', error);
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'Error interno del servidor' });
     }
 };
 
@@ -588,7 +588,7 @@ const getHojaVida = async (req, res) => {
         res.json({ success: true, data: { equipo, movimientos: movimientos.rows } });
     } catch (error) {
         console.error('Error en getHojaVida:', error);
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'Error interno del servidor' });
     }
 };
 
@@ -617,7 +617,8 @@ const getEquipoById = async (req, res) => {
         await attachPerifericos(result.rows);
         res.json({ success: true, data: result.rows[0] });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        console.error(error);
+        res.status(500).json({ success: false, message: 'Error interno del servidor' });
     }
 };
 
@@ -656,7 +657,8 @@ const reasignarPerifericos = async (req, res) => {
 
         res.json({ success: true, message: `${result.rowCount} periférico(s) reasignado(s) correctamente` });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        console.error(error);
+        res.status(500).json({ success: false, message: 'Error interno del servidor' });
     }
 };
 

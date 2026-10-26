@@ -5,6 +5,8 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const nodemailer = require('nodemailer');
+const { verificarToken } = require('../middleware/auth');
+const { limiteLogin, limiteCorreo, limitePassword } = require('../middleware/rateLimit');
 
 // Almacén temporal de tokens de recuperación { token -> { userId, email, expiry } }
 const resetTokens = new Map();
@@ -32,7 +34,7 @@ router.get('/logo-sistema', async (req, res) => {
 });
 
 // Login
-router.post('/login', async (req, res) => {
+router.post('/login', limiteLogin, async (req, res) => {
     const { email, password } = req.body;
     
     try {
@@ -90,7 +92,7 @@ router.post('/login', async (req, res) => {
 });
 
 // Activar cuenta con token de invitación
-router.post('/activar', async (req, res) => {
+router.post('/activar', limitePassword, async (req, res) => {
   const { token, password } = req.body;
 
   if (!token || !password) {
@@ -122,7 +124,8 @@ router.post('/activar', async (req, res) => {
 
     res.json({ success: true, message: 'Cuenta activada correctamente. Ya puedes iniciar sesión.' });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Error interno del servidor' });
   }
 });
 
@@ -141,15 +144,23 @@ router.get('/activar/:token', async (req, res) => {
 
     res.json({ success: true, data: result.rows[0] });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Error interno del servidor' });
   }
 });
 
-// Cambiar contraseña
-router.put('/password/:id', async (req, res) => {
-    const { id } = req.params;
+// Cambiar contraseña (solo la del propio usuario autenticado)
+router.put('/password/:id', verificarToken, limitePassword, async (req, res) => {
+    const id = req.usuario.id;
     const { currentPassword, newPassword } = req.body;
-    
+
+    if (String(req.params.id) !== String(id)) {
+        return res.status(403).json({ success: false, message: 'Solo puedes cambiar tu propia contraseña' });
+    }
+    if (!currentPassword || !newPassword || newPassword.length < 6) {
+        return res.status(400).json({ success: false, message: 'La nueva contraseña debe tener al menos 6 caracteres' });
+    }
+
     try {
         const result = await db.query('SELECT * FROM usuarios WHERE id = ?', [id]);
 
@@ -175,7 +186,7 @@ router.put('/password/:id', async (req, res) => {
 });
 
 // Recuperar contraseña - envía email con enlace
-router.post('/forgot-password', async (req, res) => {
+router.post('/forgot-password', limiteCorreo, async (req, res) => {
   const { email } = req.body;
 
   if (!email) {
@@ -228,7 +239,7 @@ router.post('/forgot-password', async (req, res) => {
 });
 
 // Restablecer contraseña con token
-router.post('/reset-password', async (req, res) => {
+router.post('/reset-password', limitePassword, async (req, res) => {
   const { token, password } = req.body;
 
   if (!token || !password) {

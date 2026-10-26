@@ -70,7 +70,7 @@ const getAuditoria = async (req, res) => {
         });
     } catch (error) {
         console.error('Error en getAuditoria:', error);
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'Error interno del servidor' });
     }
 };
 

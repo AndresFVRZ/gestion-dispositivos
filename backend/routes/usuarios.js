@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 const fs = require('fs');
 const path = require('path');
+const { verificarToken, verificarRol } = require('../middleware/auth');
 
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
@@ -145,6 +146,22 @@ const cargarEmpresas = async (usuarios) => {
   for (const u of usuarios) u.empresas = map.get(u.id) || [];
 };
 
+// Toda la gestión de usuarios exige sesión y rol de administración
+router.use(verificarToken, verificarRol(['super_admin', 'administrador']));
+
+// Solo un super_admin puede crear, modificar o eliminar cuentas super_admin
+const esSuperAdmin = (req) => req.usuario.rol === 'super_admin';
+
+const rolDeUsuario = async (id) => {
+  const r = await db.query(
+    'SELECT r.nombre AS rol FROM usuarios u LEFT JOIN roles r ON u.rol_id = r.id WHERE u.id = ?', [id]
+  );
+  return r.rows[0]?.rol || null;
+};
+
+const prohibido = (res) =>
+  res.status(403).json({ success: false, message: 'Solo un super administrador puede gestionar cuentas de super administrador' });
+
 // GET - Obtener todos los usuarios con sus empresas asignadas
 router.get('/', async (req, res) => {
   try {
@@ -172,7 +189,7 @@ router.get('/', async (req, res) => {
     res.json({ success: true, data: usuarios });
   } catch (error) {
     console.error('Error GET /usuarios:', error.message);
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({ success: false, message: 'Error interno del servidor' });
   }
 });
 
@@ -183,6 +200,7 @@ router.post('/', async (req, res) => {
   if (!nombre || !email) {
     return res.status(400).json({ success: false, message: 'Nombre y email son requeridos' });
   }
+  if (rol === 'super_admin' && !esSuperAdmin(req)) return prohibido(res);
 
   try {
     const emailCheck = await db.query('SELECT id FROM usuarios WHERE email = ?', [email]);
@@ -225,7 +243,7 @@ router.post('/', async (req, res) => {
     res.json({ success: true, message: 'Usuario creado. Invitación enviada por correo.', id: userId });
   } catch (error) {
     console.error('Error en POST /usuarios:', error.message);
-    res.status(500).json({ success: false, message: 'Error al crear usuario: ' + error.message });
+    res.status(500).json({ success: false, message: 'Error interno del servidor' });
   }
 });
 
@@ -233,6 +251,8 @@ router.post('/', async (req, res) => {
 router.post('/:id/reenviar-invitacion', async (req, res) => {
   const { id } = req.params;
   try {
+    if (!esSuperAdmin(req) && await rolDeUsuario(id) === 'super_admin') return prohibido(res);
+
     const userResult = await db.query('SELECT * FROM usuarios WHERE id = ?', [id]);
     if (userResult.rows.length === 0) {
       return res.status(404).json({ success: false, message: 'Usuario no encontrado' });
@@ -255,7 +275,8 @@ router.post('/:id/reenviar-invitacion', async (req, res) => {
 
     res.json({ success: true, message: 'Invitación reenviada correctamente' });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Error interno del servidor' });
   }
 });
 
@@ -264,7 +285,11 @@ router.put('/:id', async (req, res) => {
   const { id } = req.params;
   const { nombre, email, password, rol, empresas_ids } = req.body;
 
+  if (rol === 'super_admin' && !esSuperAdmin(req)) return prohibido(res);
+
   try {
+    if (!esSuperAdmin(req) && await rolDeUsuario(id) === 'super_admin') return prohibido(res);
+
     const rolNombre = rol || 'financiera';
     const rolResult = await db.query('SELECT id FROM roles WHERE nombre = ?', [rolNombre]);
     if (rolResult.rows.length === 0) {
@@ -303,19 +328,25 @@ router.put('/:id', async (req, res) => {
     res.json({ success: true, message: 'Usuario actualizado exitosamente' });
   } catch (error) {
     console.error('Error PUT /usuarios:', error.message);
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({ success: false, message: 'Error interno del servidor' });
   }
 });
 
 // DELETE - Soft delete
 router.delete('/:id', async (req, res) => {
   const { id } = req.params;
+  if (String(id) === String(req.usuario.id)) {
+    return res.status(400).json({ success: false, message: 'No puedes eliminar tu propia cuenta' });
+  }
   try {
+    if (!esSuperAdmin(req) && await rolDeUsuario(id) === 'super_admin') return prohibido(res);
+
     await db.query('DELETE FROM usuario_empresas WHERE usuario_id = ?', [id]);
     await db.query('UPDATE usuarios SET estado=? WHERE id=?', ['inactivo', id]);
     res.json({ success: true, message: 'Usuario eliminado exitosamente' });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Error interno del servidor' });
   }
 });
 

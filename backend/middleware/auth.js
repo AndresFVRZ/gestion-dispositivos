@@ -1,6 +1,6 @@
 const jwt = require('jsonwebtoken');
 
-const SECRET_KEY = process.env.SECRET_KEY || 'EMTRA_SECRET_KEY_2024';
+const SECRET_KEY = process.env.SECRET_KEY;
 
 const verificarToken = (req, res, next) => {
     const token = req.headers.authorization?.split(' ')[1];

@@ -40,7 +40,7 @@ const getMantenimientos = async (req, res) => {
         res.json({ success: true, data: result.rows });
     } catch (error) {
         console.error('Error getMantenimientos:', error.message);
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'Error interno del servidor' });
     }
 };
 
@@ -94,7 +94,7 @@ const crearMantenimiento = async (req, res) => {
         }
     } catch (error) {
         console.error('Error crearMantenimiento:', error.message);
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'Error interno del servidor' });
     }
 };
 
@@ -132,7 +132,7 @@ const actualizarMantenimiento = async (req, res) => {
         res.json({ success: true, data: mantRes.rows[0] });
     } catch (error) {
         console.error('Error actualizarMantenimiento:', error.message);
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'Error interno del servidor' });
     }
 };
 
@@ -162,7 +162,7 @@ const eliminarMantenimiento = async (req, res) => {
         res.json({ success: true, message: 'Mantenimiento eliminado correctamente' });
     } catch (error) {
         console.error('Error eliminarMantenimiento:', error.message);
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'Error interno del servidor' });
     }
 };
 
@@ -200,7 +200,7 @@ const completarMantenimiento = async (req, res) => {
         res.json({ success: true, data: sel.rows[0], message: 'Mantenimiento marcado como completado' });
     } catch (error) {
         console.error('Error completarMantenimiento:', error.message);
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'Error interno del servidor' });
     }
 };
 
@@ -265,7 +265,7 @@ const aprobarMantenimiento = async (req, res) => {
         }
     } catch (error) {
         console.error('Error aprobarMantenimiento:', error.message);
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'Error interno del servidor' });
     }
 };
 
@@ -305,7 +305,7 @@ const rechazarMantenimiento = async (req, res) => {
         res.json({ success: true, data: sel.rows[0], message: 'Mantenimiento rechazado. El equipo permanece en estado Mantenimiento' });
     } catch (error) {
         console.error('Error rechazarMantenimiento:', error.message);
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'Error interno del servidor' });
     }
 };
 

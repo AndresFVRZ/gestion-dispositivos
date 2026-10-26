@@ -23,7 +23,8 @@ router.get('/', verificarToken, async (req, res) => {
         );
         res.json({ success: true, data: result.rows });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        console.error(error);
+        res.status(500).json({ success: false, message: 'Error interno del servidor' });
     }
 });
 
@@ -33,7 +34,8 @@ router.get('/para-prestamo', verificarToken, async (req, res) => {
         const result = await pool.query('SELECT id, nombre FROM empresas ORDER BY nombre');
         res.json({ success: true, data: result.rows });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        console.error(error);
+        res.status(500).json({ success: false, message: 'Error interno del servidor' });
     }
 });
 
@@ -45,7 +47,8 @@ router.get('/:id', verificarToken, async (req, res) => {
             return res.status(404).json({ success: false, message: 'Empresa no encontrada' });
         res.json({ success: true, data: result.rows[0] });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        console.error(error);
+        res.status(500).json({ success: false, message: 'Error interno del servidor' });
     }
 });
 
@@ -63,7 +66,8 @@ router.post('/', verificarToken, verificarRol(['super_admin']), async (req, res)
         const result = await pool.query('SELECT * FROM empresas WHERE id = ?', [ins.insertId]);
         res.status(201).json({ success: true, data: result.rows[0] });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        console.error(error);
+        res.status(500).json({ success: false, message: 'Error interno del servidor' });
     }
 });
 
@@ -83,7 +87,8 @@ router.put('/:id', verificarToken, verificarRol(['super_admin']), async (req, re
         const result = await pool.query('SELECT * FROM empresas WHERE id = ?', [req.params.id]);
         res.json({ success: true, data: result.rows[0] });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        console.error(error);
+        res.status(500).json({ success: false, message: 'Error interno del servidor' });
     }
 });
 
@@ -93,7 +98,8 @@ router.delete('/:id/logo', verificarToken, verificarRol(['super_admin']), async 
         await pool.query('UPDATE empresas SET logo = NULL WHERE id = ?', [req.params.id]);
         res.json({ success: true, message: 'Logo eliminado' });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        console.error(error);
+        res.status(500).json({ success: false, message: 'Error interno del servidor' });
     }
 });
 

@@ -29,7 +29,7 @@ const getSedes = async (req, res) => {
         res.json({ success: true, data: result.rows });
     } catch (error) {
         console.error('Error getSedes:', error.message);
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'Error interno del servidor' });
     }
 };
 
@@ -48,7 +48,7 @@ const crearSede = async (req, res) => {
         res.status(201).json({ success: true, data: sel.rows[0] });
     } catch (error) {
         console.error('Error crearSede:', error.message);
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'Error interno del servidor' });
     }
 };
 
@@ -72,7 +72,7 @@ const actualizarSede = async (req, res) => {
         res.json({ success: true, data: sel.rows[0] });
     } catch (error) {
         console.error('Error actualizarSede:', error.message);
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'Error interno del servidor' });
     }
 };
 
@@ -86,7 +86,7 @@ const eliminarSede = async (req, res) => {
         res.json({ success: true, message: 'Sede eliminada correctamente' });
     } catch (error) {
         console.error('Error eliminarSede:', error.message);
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'Error interno del servidor' });
     }
 };
 

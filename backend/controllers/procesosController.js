@@ -32,7 +32,7 @@ const getProcesos = async (req, res) => {
         res.json({ success: true, data: result.rows });
     } catch (error) {
         console.error('Error getProcesos:', error.message);
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'Error interno del servidor' });
     }
 };
 
@@ -52,7 +52,7 @@ const crearProceso = async (req, res) => {
         res.status(201).json({ success: true, data: sel.rows[0] });
     } catch (error) {
         console.error('Error crearProceso:', error.message);
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'Error interno del servidor' });
     }
 };
 
@@ -75,7 +75,7 @@ const actualizarProceso = async (req, res) => {
         res.json({ success: true, data: sel.rows[0] });
     } catch (error) {
         console.error('Error actualizarProceso:', error.message);
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'Error interno del servidor' });
     }
 };
 
@@ -96,7 +96,7 @@ const eliminarProceso = async (req, res) => {
         res.json({ success: true, message: 'Área eliminada correctamente' });
     } catch (error) {
         console.error('Error eliminarProceso:', error.message);
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'Error interno del servidor' });
     }
 };
 

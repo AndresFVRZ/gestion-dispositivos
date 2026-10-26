@@ -41,7 +41,7 @@ const getPlacas = async (req, res) => {
         res.json({ success: true, data: result.rows });
     } catch (error) {
         console.error('Error getPlacas:', error.message);
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'Error interno del servidor' });
     }
 };
 
@@ -76,7 +76,7 @@ const crearPlaca = async (req, res) => {
         res.status(201).json({ success: true, data: sel.rows[0] });
     } catch (error) {
         console.error('Error crearPlaca:', error.message);
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'Error interno del servidor' });
     }
 };
 
@@ -117,7 +117,7 @@ const actualizarPlaca = async (req, res) => {
         res.json({ success: true, data: sel.rows[0] });
     } catch (error) {
         console.error('Error actualizarPlaca:', error.message);
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'Error interno del servidor' });
     }
 };
 
@@ -131,7 +131,7 @@ const eliminarPlaca = async (req, res) => {
         res.json({ success: true, message: 'Placa eliminada correctamente' });
     } catch (error) {
         console.error('Error eliminarPlaca:', error.message);
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'Error interno del servidor' });
     }
 };
 

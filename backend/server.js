@@ -1,31 +1,31 @@
 require('dotenv').config();
+const path = require('path');
 const express = require('express');
 const cors = require('cors');
-const jwt = require('jsonwebtoken');
+const helmet = require('helmet');
+
+// Sin SECRET_KEY cualquiera podría firmar tokens válidos: no arrancar.
+if (!process.env.SECRET_KEY) {
+    console.error('❌ Falta SECRET_KEY en el entorno (.env). El servidor no puede arrancar.');
+    process.exit(1);
+}
 
 const app = express();
 const PORT = process.env.PORT || 5080;
 
-app.use(cors());
-app.use(express.json({ limit: '10mb' }));
-app.use('/public', require('express').static(require('path').join(__dirname, 'public')));
+// En producción el backend va detrás de nginx: confiar en un salto de proxy
+// para que el rate-limit vea la IP real del cliente.
+if (process.env.NODE_ENV === 'production') app.set('trust proxy', 1);
 
-// Middleware de autenticación para obtener el usuario de la sesión
-app.use(async (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  const token = authHeader?.split(' ')[1];
-  
-  if (token) {
-    try {
-      const decoded = jwt.verify(token, process.env.SECRET_KEY);
-      req.user = decoded;
-      console.log('🔐 Usuario autenticado:', req.user?.email);
-    } catch (error) {
-      console.error('Token inválido:', error.message);
-    }
-  }
-  next();
-});
+// Orígenes permitidos para CORS (lista separada por comas). Por defecto, el frontend.
+const CORS_ORIGINS = (process.env.CORS_ORIGINS || process.env.APP_URL || 'http://localhost:5180')
+    .split(',').map(o => o.trim()).filter(Boolean);
+
+// Los logos de /public se cargan desde el frontend (otro origen) y desde los correos.
+app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
+app.use(cors({ origin: CORS_ORIGINS }));
+app.use(express.json({ limit: '10mb' }));
+app.use('/public', express.static(path.join(__dirname, 'public')));
 
 // Importar rutas
 const authRoutes = require('./routes/auth');
@@ -57,7 +57,12 @@ app.use('/api/mantenimientos', mantenimientosRoutes);
 app.use('/api/procesos', procesosRoutes);
 app.use('/api/stock', stockRoutes);
 
-app.listen(PORT, () => {
-    console.log(`\n🚀 Servidor corriendo en http://localhost:${PORT}`);
-    console.log('✅ Listo para usar\n');
-});
+// Solo escuchar al ejecutarse directamente (los tests importan `app`)
+if (require.main === module) {
+    app.listen(PORT, () => {
+        console.log(`\n🚀 Servidor corriendo en http://localhost:${PORT}`);
+        console.log('✅ Listo para usar\n');
+    });
+}
+
+module.exports = app;

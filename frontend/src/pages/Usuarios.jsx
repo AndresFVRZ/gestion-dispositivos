@@ -295,7 +295,9 @@ function Usuarios() {
                       <option value="logistica">Logística</option>
                       <option value="gerencia">Gerencia</option>
                       <option value="administrador">Administrador</option>
-                      <option value="super_admin">Super Administrador</option>
+                      {(usuarioActual?.rol === 'super_admin' || formData.rol === 'super_admin') && (
+                        <option value="super_admin">Super Administrador</option>
+                      )}
                     </select>
                   </div>
                 </div>

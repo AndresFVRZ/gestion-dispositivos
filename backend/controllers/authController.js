@@ -4,7 +4,7 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { sendEmail } = require('../services/emailService');
 
-const SECRET_KEY = process.env.SECRET_KEY || 'EMTRA_SECRET_KEY_2024';
+const SECRET_KEY = process.env.SECRET_KEY;
 
 // Generar token de recuperación
 const generateResetToken = () => {
@@ -281,7 +281,7 @@ const cambiarPassword = async (req, res) => {
         console.error('Error en cambiarPassword:', error);
         res.status(500).json({
             success: false,
-            message: error.message
+            message: 'Error interno del servidor'
         });
     }
 };
@@ -303,7 +303,7 @@ const getUsuarios = async (req, res) => {
         res.json({ success: true, data: result.rows, total: result.rows.length });
     } catch (error) {
         console.error('Error en getUsuarios:', error);
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'Error interno del servidor' });
     }
 };
 
@@ -330,7 +330,7 @@ const getUsuarioById = async (req, res) => {
         res.json({ success: true, data: result.rows[0] });
     } catch (error) {
         console.error('Error en getUsuarioById:', error);
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'Error interno del servidor' });
     }
 };
 
@@ -391,7 +391,7 @@ const crearUsuario = async (req, res) => {
         console.error('Error en crearUsuario:', error);
         res.status(500).json({
             success: false,
-            message: error.message
+            message: 'Error interno del servidor'
         });
     }
 };
@@ -437,7 +437,7 @@ const actualizarUsuario = async (req, res) => {
         console.error('Error en actualizarUsuario:', error);
         res.status(500).json({
             success: false,
-            message: error.message
+            message: 'Error interno del servidor'
         });
     }
 };
@@ -475,7 +475,7 @@ const eliminarUsuario = async (req, res) => {
         console.error('Error en eliminarUsuario:', error);
         res.status(500).json({
             success: false,
-            message: error.message
+            message: 'Error interno del servidor'
         });
     }
 };
